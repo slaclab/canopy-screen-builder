@@ -11,10 +11,9 @@
 //    / `tabs`) all degrade to SB `Group` on import, so they all re-emit as the
 //    single canonical `'group'` IR type — the original chrome distinction is
 //    gone for good the moment the screen opens in SB.
-//  - `related-display-button` degrades to `PVButton` + a synthesized
-//    `open_display` action on import, so it re-emits as `'regular-button'`
-//    with the action carried in the reserved `actions` prop (see below) —
-//    never as `related-display-button` again.
+//  - `related-display-button` is a first-class widget (`PVRelatedDisplayButton`)
+//    that round-trips as `related-display-button` with `file`/`macros`/`target`
+//    on `props` — no synthesized action.
 //  - An `unknown-widget` placeholder imports as a `Rectangle` carrying
 //    `originalClass`/`originalProps` as plain props; it re-emits as a plain
 //    `'rectangle'`, keeping those props verbatim (no special-casing on
@@ -188,7 +187,12 @@ const TYPE_EXPORT_TABLE: Record<WidgetType, TypeExport> = {
     renames: { pvName: 'pv', alarmSensitiveBorder: 'alarmSensitive' },
   },
   EmbeddedScreen: { irType: () => 'embedded-display', renames: NO_RENAMES },
-  ScreenImage: { irType: () => 'image-view', renames: { filename: 'src' } },
+  Image: {
+    // `mode: 'live'` emits `pv-image-view`; anything else emits the plain
+    // `image-view` type — one widget, two IR flavors picked by mode.
+    irType: (w) => (w.props.mode === 'live' ? 'pv-image-view' : 'image-view'),
+    renames: { pvName: 'pv' },
+  },
   // Identity-imported types (see `irWidgetMap.ts`'s "Identity entries" section)
   // — verbatim, no renames. For the pv-flavored ones the model key `pvName`
   // stays `pvName` on export (NOT renamed to `pv`); import's tolerance for a
@@ -205,6 +209,13 @@ const TYPE_EXPORT_TABLE: Record<WidgetType, TypeExport> = {
   PVGauge: { irType: () => 'pv-gauge', renames: NO_RENAMES },
   PVTank: { irType: () => 'pv-tank', renames: NO_RENAMES },
   PVThermometer: { irType: () => 'pv-thermometer', renames: NO_RENAMES },
+  PVRelatedDisplayButton: { irType: () => 'related-display-button', renames: NO_RENAMES },
+  PVSymbol: { irType: () => 'pv-symbol', renames: { pvName: 'pv' } },
+  PVTimePlot: { irType: () => 'pv-time-plot', renames: { pvName: 'pv' } },
+  PVScatterPlot: {
+    irType: () => 'pv-scatter-plot',
+    renames: { pvNameX: 'xPv', pvNameY: 'yPv' },
+  },
 };
 
 /**

@@ -14,13 +14,18 @@ import {
   CarbonPVByteIndicator,
   CarbonPVRadioGroup,
   CarbonPVShellCommand,
+  CarbonPVRelatedDisplayButton,
 } from '../pv-wrappers/CarbonWidgets';
 import { LineWidget } from '../drawing/LineWidget';
-import { ScreenImageWidget } from '../drawing/ScreenImageWidget';
+import { ImageWidget } from '../drawing/ImageWidget';
 import { PVMeterWidget } from '../indicators/PVMeterWidget';
+import { PVSymbolWidget } from '../indicators/PVSymbolWidget';
 import { useFitText } from '../shared/useFitText';
 import { ArcWidget } from '../drawing/ArcWidget';
+import { PolygonWidget } from '../drawing/PolygonWidget';
 import { PVWaveformPlot } from '../charts/PVWaveformPlot';
+import { PVTimePlot } from '../charts/PVTimePlot';
+import { PVScatterPlot } from '../charts/PVScatterPlot';
 
 // ── Shared prop schemas ─────────────────────────────────────────────────────
 
@@ -415,6 +420,43 @@ export function registerBuiltinWidgets() {
   });
 
   widgetRegistry.register({
+    type: 'PVSymbol',
+    label: 'Symbol',
+    category: 'indicator',
+    icon: 'Diamond',
+    defaultLayout: { x: 0, y: 0, width: 80, height: 80 },
+    // Two-state PyDMSymbol-style default: value 0 → off, 1 → on. Users edit
+    // the `src` per state via the code editor / IR until inline states get
+    // an inspector control.
+    defaultProps: {
+      stretchMode: 'fit',
+      defaultSrc: '',
+      states: [
+        { value: 0, label: 'Off' },
+        { value: 1, label: 'On' },
+      ],
+    },
+    component: PVSymbolWidget,
+    propsSchema: [
+      pvSchema,
+      { key: 'defaultSrc', label: 'Fallback Image', type: 'string', section: 'display' },
+      {
+        key: 'stretchMode',
+        label: 'Stretch Mode',
+        type: 'select',
+        section: 'appearance',
+        options: [
+          { label: 'None', value: 'none' },
+          { label: 'Fit', value: 'fit' },
+          { label: 'Fill', value: 'fill' },
+          { label: 'Stretch', value: 'stretch' },
+        ],
+      },
+      ...alarmSchemas,
+    ],
+  });
+
+  widgetRegistry.register({
     type: 'PVByteIndicator',
     label: 'Byte Indicator',
     category: 'indicator',
@@ -550,6 +592,62 @@ export function registerBuiltinWidgets() {
   });
 
   widgetRegistry.register({
+    type: 'Polygon',
+    label: 'Polygon',
+    category: 'drawing',
+    icon: 'CategoryNewEach',
+    defaultLayout: { x: 0, y: 0, width: 120, height: 100 },
+    defaultProps: {
+      numPoints: 3,
+      closed: true,
+      lineColor: '#6f6f6f',
+      lineWidth: 2,
+      lineStyle: 'solid',
+      fill: false,
+    },
+    component: PolygonWidget,
+    propsSchema: [
+      {
+        key: 'numPoints',
+        label: 'Number of Points',
+        type: 'number',
+        section: 'appearance',
+        min: 3,
+        max: 20,
+        step: 1,
+      },
+      {
+        key: 'closed',
+        label: 'Closed (Polygon)',
+        type: 'boolean',
+        section: 'appearance',
+      },
+      { key: 'lineColor', label: 'Line Color', type: 'color', section: 'appearance' },
+      {
+        key: 'lineWidth',
+        label: 'Line Width',
+        type: 'number',
+        section: 'appearance',
+        min: 0,
+        max: 20,
+      },
+      {
+        key: 'lineStyle',
+        label: 'Line Style',
+        type: 'select',
+        section: 'appearance',
+        options: [
+          { label: 'Solid', value: 'solid' },
+          { label: 'Dashed', value: 'dashed' },
+          { label: 'Dotted', value: 'dotted' },
+        ],
+      },
+      { key: 'fill', label: 'Fill', type: 'boolean', section: 'appearance' },
+      { key: 'fillColor', label: 'Fill Color', type: 'color', section: 'appearance' },
+    ],
+  });
+
+  widgetRegistry.register({
     type: 'Line',
     label: 'Line',
     category: 'drawing',
@@ -613,15 +711,42 @@ export function registerBuiltinWidgets() {
   });
 
   widgetRegistry.register({
-    type: 'ScreenImage',
+    type: 'Image',
     label: 'Image',
     category: 'drawing',
     icon: 'Image',
     defaultLayout: { x: 0, y: 0, width: 120, height: 120 },
-    defaultProps: { stretchMode: 'fit' },
-    component: ScreenImageWidget,
+    defaultProps: { mode: 'static', stretchMode: 'fit' },
+    component: ImageWidget,
     propsSchema: [
-      { key: 'filename', label: 'Filename', type: 'string', section: 'display' },
+      {
+        key: 'mode',
+        label: 'Source',
+        type: 'select',
+        section: 'behavior',
+        options: [
+          { label: 'Static file', value: 'static' },
+          { label: 'Live PV', value: 'live' },
+        ],
+      },
+      { key: 'src', label: 'Image Path', type: 'string', section: 'display' },
+      pvSchema,
+      {
+        key: 'imageWidth',
+        label: 'Image Width (live)',
+        type: 'number',
+        section: 'behavior',
+        min: 0,
+      },
+      {
+        key: 'imageHeight',
+        label: 'Image Height (live)',
+        type: 'number',
+        section: 'behavior',
+        min: 0,
+      },
+      { key: 'imageMin', label: 'Min Value (live)', type: 'number', section: 'behavior' },
+      { key: 'imageMax', label: 'Max Value (live)', type: 'number', section: 'behavior' },
       {
         key: 'stretchMode',
         label: 'Stretch Mode',
@@ -634,6 +759,7 @@ export function registerBuiltinWidgets() {
           { label: 'Stretch', value: 'stretch' },
         ],
       },
+      ...alarmSchemas,
     ],
   });
 
@@ -679,6 +805,33 @@ export function registerBuiltinWidgets() {
   });
 
   widgetRegistry.register({
+    type: 'PVRelatedDisplayButton',
+    label: 'Related Display',
+    category: 'input',
+    icon: 'Launch',
+    defaultLayout: { x: 0, y: 0, width: 140, height: 32 },
+    defaultProps: { label: 'Open', target: 'window', showIcon: true },
+    component: CarbonPVRelatedDisplayButton,
+    propsSchema: [
+      { key: 'file', label: 'Target File', type: 'string', section: 'behavior' },
+      {
+        key: 'target',
+        label: 'Open In',
+        type: 'select',
+        section: 'behavior',
+        options: [
+          { label: 'New Window', value: 'window' },
+          { label: 'New Tab', value: 'tab' },
+          { label: 'Replace Current', value: 'replace' },
+        ],
+      },
+      { key: 'label', label: 'Label', type: 'string', section: 'display' },
+      { key: 'showIcon', label: 'Show Icon', type: 'boolean', section: 'display' },
+      ...appearanceSchemas,
+    ],
+  });
+
+  widgetRegistry.register({
     type: 'PVWaveformPlot',
     label: 'Waveform Plot',
     category: 'chart',
@@ -687,5 +840,57 @@ export function registerBuiltinWidgets() {
     defaultProps: { title: '' },
     component: PVWaveformPlot,
     propsSchema: [{ key: 'title', label: 'Title', type: 'string', section: 'display' }],
+  });
+
+  widgetRegistry.register({
+    type: 'PVTimePlot',
+    label: 'Time Plot',
+    category: 'chart',
+    icon: 'ChartLineData',
+    defaultLayout: { x: 0, y: 0, width: 400, height: 240 },
+    defaultProps: { timeWindow: 60, color: '#0f62fe' },
+    component: PVTimePlot,
+    propsSchema: [
+      pvSchema,
+      { key: 'title', label: 'Title', type: 'string', section: 'display' },
+      { key: 'yLabel', label: 'Y Label', type: 'string', section: 'display' },
+      {
+        key: 'timeWindow',
+        label: 'Window (s)',
+        type: 'number',
+        section: 'behavior',
+        min: 5,
+        max: 3600,
+        step: 5,
+      },
+      { key: 'color', label: 'Line Color', type: 'color', section: 'appearance' },
+    ],
+  });
+
+  widgetRegistry.register({
+    type: 'PVScatterPlot',
+    label: 'Scatter Plot',
+    category: 'chart',
+    icon: 'ChartScatter',
+    defaultLayout: { x: 0, y: 0, width: 400, height: 300 },
+    defaultProps: { maxPoints: 500, color: '#0f62fe' },
+    component: PVScatterPlot,
+    propsSchema: [
+      { key: 'pvNameX', label: 'X PV', type: 'pv', section: 'pv' },
+      { key: 'pvNameY', label: 'Y PV', type: 'pv', section: 'pv' },
+      { key: 'title', label: 'Title', type: 'string', section: 'display' },
+      { key: 'xLabel', label: 'X Label', type: 'string', section: 'display' },
+      { key: 'yLabel', label: 'Y Label', type: 'string', section: 'display' },
+      {
+        key: 'maxPoints',
+        label: 'Max Points',
+        type: 'number',
+        section: 'behavior',
+        min: 10,
+        max: 10000,
+        step: 10,
+      },
+      { key: 'color', label: 'Point Color', type: 'color', section: 'appearance' },
+    ],
   });
 }

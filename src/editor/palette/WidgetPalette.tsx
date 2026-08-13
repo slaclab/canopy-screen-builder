@@ -86,7 +86,7 @@ const WIDGET_ICONS: Partial<Record<WidgetType, React.ComponentType<{ size: numbe
   Arc: ArcIcon,
   Line: HorizontalLineSolid,
   StaticLabel: Label,
-  ScreenImage: Image,
+  Image: Image,
   Group: GroupObjects,
   EmbeddedScreen: Screen,
 };
