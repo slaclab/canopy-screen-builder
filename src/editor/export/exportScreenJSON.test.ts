@@ -166,7 +166,7 @@ describe('exportScreenJSON — prop key ordering', () => {
     ]);
     const doc = exportScreenJSON(model, { savedAt: FIXED });
     const node = doc.root.children![0];
-    expect(Object.keys(node.props)).toEqual(['apple', 'mango', 'name', 'zebra']);
+    expect(Object.keys(node.props)).toEqual(['apple', 'mango', 'zebra']);
   });
 });
 
@@ -220,8 +220,9 @@ describe('exportScreenJSON — reserved carrier props', () => {
     expect(node.props).not.toHaveProperty('rotation');
     expect(node.props).not.toHaveProperty('locked');
     expect(node.props).not.toHaveProperty('actions');
-    // `name` is always carried, even at defaults.
-    expect(node.props.name).toBe('Rectangle_w1');
+    // A name still at the generated default is what an import falls back
+    // to anyway, so it is not written either.
+    expect(node.props).not.toHaveProperty('name');
   });
 
   it('omits the locked carrier when unset (undefined)', () => {

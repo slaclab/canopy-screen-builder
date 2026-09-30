@@ -44,8 +44,13 @@ export interface ImportReport {
   degradedWidgets: { widgetId: string; type: string; reason: string }[];
   /** IR prop keys discarded with no SB home. */
   droppedProps: { widgetId: string; type: string; keys: string[] }[];
-  /** Formula-driven rules dropped (no SB equivalent yet). */
+  /** Rules dropped on import. Always empty today; kept for the report's consumers. */
   droppedRules: string[];
+  /**
+   * Formula-driven rules: no SB equivalent yet, so not editable, but carried
+   * on the widget and written back unchanged on save.
+   */
+  keptRules: string[];
   /** Node warnings + soft import notes (e.g. duplicate-id renames). */
   warnings: string[];
 }
@@ -56,6 +61,7 @@ function emptyReport(): ImportReport {
     degradedWidgets: [],
     droppedProps: [],
     droppedRules: [],
+    keptRules: [],
     warnings: [],
   };
 }
@@ -128,10 +134,14 @@ export function importScreenJSON(json: unknown): { screen: ScreenModel; report: 
     // (their props ARE the preserved original Qt props, not exporter carriers).
     const carriers = mapped.unknown ? undefined : liftCarrierProps(mapped.props, id, report);
 
+    const rules = mapRules(node.rules, id, report);
+    const ir = mapped.ir ?? {};
+    if (rules.kept.length > 0) ir.rules = rules.kept;
+
     const widget: Widget = {
       id,
       type: mapped.sbType,
-      name: carriers?.name ?? `${mapped.sbType}_${id}`,
+      name: carriers?.name ?? defaultWidgetName(mapped.sbType, id),
       layout: {
         x: node.geometry.x,
         y: node.geometry.y,
@@ -140,7 +150,7 @@ export function importScreenJSON(json: unknown): { screen: ScreenModel; report: 
       },
       visible: carriers?.visible ?? true,
       rotation: carriers?.rotation ?? 0,
-      rules: mapRules(node.rules, id, report),
+      rules: rules.mapped,
       actions: [...mapped.actions, ...(carriers?.actions ?? [])],
       props: mapped.props,
       zIndex: zCounter++,
@@ -155,6 +165,8 @@ export function importScreenJSON(json: unknown): { screen: ScreenModel; report: 
     // Node-level warnings are durable IR data (unlike the report, which is a
     // one-time import summary): carry them so a save re-emits them node-level.
     if (node.warnings?.length) widget.warnings = [...node.warnings];
+
+    if (Object.keys(ir).length > 0) widget.ir = ir;
 
     widgets[id] = widget;
     return id;
@@ -186,6 +198,15 @@ export function importScreenJSON(json: unknown): { screen: ScreenModel; report: 
  * omits it when empty). Non-object input is returned untouched for `validate()`
  * to reject with a precise message.
  */
+/**
+ * The name a widget gets when the document carries none. A save leaves a
+ * name out while it still equals this, so opening and saving a converted
+ * screen does not stamp a `name` prop on every node.
+ */
+export function defaultWidgetName(sbType: string, id: string): string {
+  return `${sbType}_${id}`;
+}
+
 function normalizeForRead(json: unknown): unknown {
   if (!json || typeof json !== 'object') return json;
   const obj = json as Record<string, unknown>;
@@ -222,12 +243,29 @@ function buildMeta(doc: ScreenJSON): ScreenMeta {
   if (Object.keys(macroDescriptions).length > 0) meta.macroDescriptions = macroDescriptions;
 
   const rootProps = (doc.root.props ?? {}) as Record<string, unknown>;
-  if (typeof rootProps.backgroundColor === 'string')
+  // Root prop keys that landed on `meta`; whatever is left over (an unknown
+  // key, or a known one with a malformed value) is carried verbatim.
+  const lifted = new Set<string>(['width', 'height']);
+  if (typeof rootProps.backgroundColor === 'string') {
     meta.backgroundColor = rootProps.backgroundColor;
-  if (typeof rootProps.gridSize === 'number') meta.gridSize = rootProps.gridSize;
-  if (typeof rootProps.showGrid === 'boolean') meta.showGrid = rootProps.showGrid;
-  if (typeof rootProps.snapToGrid === 'boolean') meta.snapToGrid = rootProps.snapToGrid;
-  if (typeof rootProps.version === 'string') meta.version = rootProps.version;
+    lifted.add('backgroundColor');
+  }
+  if (typeof rootProps.gridSize === 'number') {
+    meta.gridSize = rootProps.gridSize;
+    lifted.add('gridSize');
+  }
+  if (typeof rootProps.showGrid === 'boolean') {
+    meta.showGrid = rootProps.showGrid;
+    lifted.add('showGrid');
+  }
+  if (typeof rootProps.snapToGrid === 'boolean') {
+    meta.snapToGrid = rootProps.snapToGrid;
+    lifted.add('snapToGrid');
+  }
+  if (typeof rootProps.version === 'string') {
+    meta.version = rootProps.version;
+    lifted.add('version');
+  }
   if (
     rootProps.theme === 'white' ||
     rootProps.theme === 'g10' ||
@@ -235,15 +273,42 @@ function buildMeta(doc: ScreenJSON): ScreenMeta {
     rootProps.theme === 'g100'
   ) {
     meta.theme = rootProps.theme;
+    lifted.add('theme');
   }
   if (typeof rootProps.showHorizontalScrollbar === 'boolean') {
     meta.showHorizontalScrollbar = rootProps.showHorizontalScrollbar;
+    lifted.add('showHorizontalScrollbar');
   }
   if (typeof rootProps.showVerticalScrollbar === 'boolean') {
     meta.showVerticalScrollbar = rootProps.showVerticalScrollbar;
+    lifted.add('showVerticalScrollbar');
   }
+  const leftover = Object.fromEntries(Object.entries(rootProps).filter(([k]) => !lifted.has(k)));
+  if (Object.keys(leftover).length > 0) meta.rootProps = leftover;
+
+  // Root-node passthrough: the converter's root id (`w-001`, not `root`) and
+  // the screen-level notes it stamps on the root node.
+  if (doc.root.id !== 'root') meta.rootId = doc.root.id;
+  if (doc.root.warnings?.length) meta.rootWarnings = [...doc.root.warnings];
+
+  const provenance = provenanceOf(doc.metadata.source as Record<string, unknown>);
+  if (Object.keys(provenance).length > 0) meta.provenance = provenance;
 
   return meta;
+}
+
+/**
+ * What a save must keep of `metadata.source`. The builder stamps its own
+ * `type` and `savedAt`, so those two go; a converter's `type` moves to
+ * `origin` (unless an earlier save already recorded one) and every other key
+ * (`sourceFile`, `convertedAt`, ...) is kept as it is.
+ */
+function provenanceOf(source: Record<string, unknown>): Record<string, unknown> {
+  const rest = { ...source };
+  delete rest.type;
+  delete rest.savedAt;
+  if (source.type !== 'screen-builder' && rest.origin === undefined) rest.origin = source.type;
+  return rest;
 }
 
 /**
@@ -332,7 +397,9 @@ function liftCarrierProps(
 /**
  * Map IR rules (a discriminated union) to SB rules (a single flat shape).
  *
- * - **Formula-driven** rules have no SB equivalent yet → dropped + reported.
+ * - **Formula-driven** rules have no SB equivalent yet → not editable, but
+ *   kept verbatim (with their position) for the exporter to write back, and
+ *   reported.
  * - **Conditional** rules map `conditions[].expression` → `expressions[].condition`
  *   (note the field flip), and the IR `default` is folded into a trailing
  *   catch-all `{ condition: 'true', value: default }` so its semantics survive.
@@ -343,13 +410,15 @@ function mapRules(
   irRules: readonly IRRule[] | undefined,
   widgetId: string,
   report: ImportReport
-): Rule[] {
+): { mapped: Rule[]; kept: { index: number; rule: unknown }[] } {
   const rules: Rule[] = [];
-  for (const ir of irRules ?? []) {
+  const kept: { index: number; rule: unknown }[] = [];
+  for (const [index, ir] of (irRules ?? []).entries()) {
     if ('formula' in ir) {
-      report.droppedRules.push(`${ir.name} (formula-driven) on widget '${widgetId}'`);
+      kept.push({ index, rule: ir });
+      report.keptRules.push(`${ir.name} (formula-driven) on widget '${widgetId}'`);
       report.warnings.push(
-        `rule '${ir.name}' on '${widgetId}' is formula-driven and was dropped (no SB support yet)`
+        `rule '${ir.name}' on '${widgetId}' is formula-driven: kept as-is on save, but not editable (no SB support yet)`
       );
       continue;
     }
@@ -367,5 +436,5 @@ function mapRules(
       pvs: ir.pvs.map((pv) => ({ name: pv.name, trigger: pv.trigger })),
     });
   }
-  return rules;
+  return { mapped: rules, kept };
 }
