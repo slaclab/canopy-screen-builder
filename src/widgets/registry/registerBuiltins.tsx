@@ -16,6 +16,8 @@ import {
   CarbonPVShellCommand,
 } from '../pv-wrappers/CarbonWidgets';
 import { LineWidget } from '../drawing/LineWidget';
+import { PolygonWidget } from '../drawing/PolygonWidget';
+import { EmbeddedScreenWidget } from '../drawing/EmbeddedScreenWidget';
 import { ScreenImageWidget } from '../drawing/ScreenImageWidget';
 import { PVMeterWidget } from '../indicators/PVMeterWidget';
 import { useFitText } from '../shared/useFitText';
@@ -599,6 +601,47 @@ export function registerBuiltinWidgets() {
   });
 
   widgetRegistry.register({
+    type: 'Polygon',
+    label: 'Polygon',
+    category: 'drawing',
+    icon: 'PentagonOutline',
+    defaultLayout: { x: 0, y: 0, width: 100, height: 100 },
+    defaultProps: {
+      lineColor: '#6f6f6f',
+      lineWidth: 2,
+      lineStyle: 'solid',
+      closed: true,
+      fill: false,
+    },
+    component: PolygonWidget,
+    propsSchema: [
+      { key: 'lineColor', label: 'Line Color', type: 'color', section: 'appearance' },
+      {
+        key: 'lineWidth',
+        label: 'Line Width',
+        type: 'number',
+        section: 'appearance',
+        min: 0,
+        max: 20,
+      },
+      {
+        key: 'lineStyle',
+        label: 'Line Style',
+        type: 'select',
+        section: 'appearance',
+        options: [
+          { label: 'Solid', value: 'solid' },
+          { label: 'Dashed', value: 'dashed' },
+          { label: 'Dotted', value: 'dotted' },
+        ],
+      },
+      { key: 'closed', label: 'Closed', type: 'boolean', section: 'appearance' },
+      { key: 'fill', label: 'Fill', type: 'boolean', section: 'appearance' },
+      { key: 'fillColor', label: 'Fill Color', type: 'color', section: 'appearance' },
+    ],
+  });
+
+  widgetRegistry.register({
     type: 'StaticLabel',
     label: 'Label',
     category: 'drawing',
@@ -656,6 +699,32 @@ export function registerBuiltinWidgets() {
           { label: 'Absolute', value: 'absolute' },
           { label: 'Flex', value: 'flex' },
           { label: 'Grid', value: 'grid' },
+        ],
+      },
+    ],
+  });
+
+  widgetRegistry.register({
+    type: 'EmbeddedScreen',
+    label: 'Embedded Screen',
+    category: 'container',
+    icon: 'Screen',
+    defaultLayout: { x: 0, y: 0, width: 240, height: 160 },
+    defaultProps: {},
+    component: EmbeddedScreenWidget,
+    propsSchema: [
+      { key: 'file', label: 'Screen File', type: 'string', section: 'display' },
+      {
+        key: 'resizeMode',
+        label: 'Resize',
+        type: 'select',
+        section: 'display',
+        options: [
+          { label: 'None', value: 'none' },
+          { label: 'Resize', value: 'resize' },
+          { label: 'Size to Content', value: 'sizeToContent' },
+          { label: 'Stretch', value: 'stretch' },
+          { label: 'Crop', value: 'crop' },
         ],
       },
     ],

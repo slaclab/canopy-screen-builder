@@ -16,6 +16,8 @@ describe('registerBuiltinWidgets', () => {
     'ScreenImage',
     'PVShellCommand',
     'PVWaveformPlot',
+    'Polygon',
+    'EmbeddedScreen',
     // Plus the long-standing set, as a sanity check.
     'PVTextDisplay',
     'PVButton',

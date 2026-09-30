@@ -181,6 +181,7 @@ describe('normalizeScreen', () => {
 const EXPECTED_REGISTERED_TYPES: WidgetType[] = [
   'Arc',
   'Ellipse',
+  'EmbeddedScreen',
   'Group',
   'Line',
   'PVButton',
@@ -197,6 +198,7 @@ const EXPECTED_REGISTERED_TYPES: WidgetType[] = [
   'PVTextInput',
   'PVToggle',
   'PVWaveformPlot',
+  'Polygon',
   'Rectangle',
   'ScreenImage',
   'StaticLabel',
@@ -232,7 +234,7 @@ function buildExerciseProps(def: WidgetDefinition): Widget['props'] {
 }
 
 describe('registry-driven per-type round trip', () => {
-  it('registers exactly the expected 21 widget types', () => {
+  it('registers exactly the expected 23 widget types', () => {
     const registered = widgetRegistry
       .getAll()
       .map((d) => d.type)
