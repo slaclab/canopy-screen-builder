@@ -326,13 +326,13 @@ function kitchenSinkScreen(): ScreenModel {
     id: 'display-1',
     type: 'PVTextDisplay',
     layout: { x: 320, y: 60, width: 150, height: 24 },
-    props: { pvName: 'fox://f1' },
+    props: { pvName: 'formula://f1' },
     rules: [
       {
         name: 'color-by-alarm',
         targetProperty: 'foregroundColor',
         outputExpression: false,
-        pvs: [{ name: 'fox://f1', trigger: true }],
+        pvs: [{ name: 'formula://f1', trigger: true }],
         expressions: [
           { condition: '{0} > 1', value: '#ff0000' },
           { condition: '{0} > 2', value: '#ff8800' },
@@ -447,7 +447,7 @@ describe('kitchen-sink screen', () => {
       { expression: '{0} > 1', value: '#ff0000' },
       { expression: '{0} > 2', value: '#ff8800' },
     ]);
-    expect('pvs' in rule && rule.pvs).toEqual([{ name: 'fox://f1', trigger: true }]);
+    expect('pvs' in rule && rule.pvs).toEqual([{ name: 'formula://f1', trigger: true }]);
   });
 
   it('carries visible/rotation/locked/name for the special widget', () => {

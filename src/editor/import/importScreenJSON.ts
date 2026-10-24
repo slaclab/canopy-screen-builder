@@ -337,7 +337,7 @@ function liftCarrierProps(
  *   (note the field flip), and the IR `default` is folded into a trailing
  *   catch-all `{ condition: 'true', value: default }` so its semantics survive.
  * The IR `id` is kept verbatim on the SB rule (`Rule.id`) so a re-save re-emits
- * it unchanged; `pvs` map 1:1, leaving `fox://`/`${MACRO}` names literal.
+ * it unchanged; `pvs` map 1:1, leaving `formula://`/`${MACRO}` names literal.
  */
 function mapRules(
   irRules: readonly IRRule[] | undefined,

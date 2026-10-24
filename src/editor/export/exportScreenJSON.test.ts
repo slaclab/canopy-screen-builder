@@ -94,7 +94,7 @@ describe('exportScreenJSON — negative / validation coverage', () => {
     expect(() => exportScreenJSON(model, { savedAt: FIXED })).toThrow(ExportError);
   });
 
-  it('throws when a rule pv references a fox:// formula with no formulas entry', () => {
+  it('throws when a rule pv references a formula:// formula with no formulas entry', () => {
     const model = mkScreen([
       mkWidget({
         id: 'w1',
@@ -105,13 +105,13 @@ describe('exportScreenJSON — negative / validation coverage', () => {
             name: 'missing-formula',
             targetProperty: 'onColor',
             outputExpression: false,
-            pvs: [{ name: 'fox://missing', trigger: true }],
+            pvs: [{ name: 'formula://missing', trigger: true }],
             expressions: [{ condition: 'true', value: '#00ff00' }],
           },
         ],
       }),
     ]);
-    // No `formulas` on meta at all — 'fox://missing' resolves against nothing.
+    // No `formulas` on meta at all — 'formula://missing' resolves against nothing.
     expect(() => exportScreenJSON(model, { savedAt: FIXED })).toThrow(ExportError);
   });
 
