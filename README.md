@@ -116,3 +116,12 @@ Runtime environment variables:
 The app serves even when Canopy is unreachable — nginx resolves the upstream per
 request, so conversions return 502 while static content keeps working, rather
 than the container failing to start.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues as described in
+[SECURITY.md](SECURITY.md), not in public issues.
+
+## License
+
+See [LICENSE.md](LICENSE.md).
