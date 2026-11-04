@@ -1,44 +1,34 @@
-# EED SWApps React Template
+# canopy-screen-builder
 
-A template repository for React projects in the EED Software Applications Group at SLAC National Accelerator Laboratory.
+A drag-and-drop editor for control-system screens. Lay out widgets bound to
+EPICS process variables on a canvas, set their properties, and save the result
+as a screen IR document (`*.screen.json`) that
+[canopy-screen-runtime](https://github.com/slaclab/canopy-screen-runtime)
+renders.
 
-## What's included
-
-- **React 19** with **TypeScript**
-- **Vite** for fast dev server and builds
-- **Vitest** + **React Testing Library** for unit/integration tests
-- **ESLint** + **Prettier** + **Husky** pre-commit hooks for consistent code style
-- **Zensical** (MkDocs-based) documentation site with GitHub Pages deployment
-- GitHub Actions workflows for lint, type-check, test, and docs deployment
+- Widget palette, canvas with grid and snapping, component tree and property
+  inspector, built on IBM's [Carbon](https://carbondesignsystem.com) components
+- Several screens open at once, in tabs, with undo and redo
+- Screen macros (`${P}:VAL`) and screen-level formulas
+- Live preview against simulated PV data
+- Save and open `*.screen.json`, validated against the screen IR schema from
+  [`@slaclab/canopy-screen-ir`](https://www.npmjs.com/package/@slaclab/canopy-screen-ir)
+- Import legacy EDM (`.edl`) and PyDM (`.ui`) screens through the converter API
+  of a [Canopy](https://github.com/slaclab/canopy) backend
+- Export a screen as React TSX (one way)
 
 ## Getting started
 
-### Create a new project from this template
-
-Click **Use this template** on GitHub, or clone and reinitialize:
-
-```sh
-git clone https://github.com/slaclab/eed-swapps-react-template.git my-app
-cd my-app
-git remote remove origin
-```
-
-### After cloning, update the project name
-
-1. `package.json` — update `name` and `description`
-2. `index.html` — update `<title>`
-3. `pyproject.toml` — update `name` and `description`
-4. `zensical.toml` — update `site_name`, `site_description`, `repo_name`, `repo_url`, and the social link
-
-### Install dependencies
-
-Requires [pnpm](https://pnpm.io/installation).
+Requires Node.js and [pnpm](https://pnpm.io/installation).
 
 ```sh
 pnpm install
+pnpm dev
 ```
 
-`@slaclab/canopy-screen-ir` comes from the public npm registry (0.3.0 and later), so no token or `.npmrc` is needed.
+The editor works without a backend. Importing `.edl` and `.ui` files needs a
+running Canopy: copy `.env.example` to `.env.local` and set
+`VITE_CANOPY_BASE_URL` and `VITE_CANOPY_API_KEY` there.
 
 ## Development
 
