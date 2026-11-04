@@ -73,23 +73,17 @@ These GitHub Actions workflows run on pull requests and pushes to `main`:
 - **Lint & Format** — ESLint, Prettier, and TypeScript type-check
 - **Test** — Vitest test suite
 - **Build & Deploy Documentation** — builds the Zensical docs site and deploys to GitHub Pages
-- **Build image and deploy dev** — builds the Docker image; on `main`, pushes it
-  to GHCR and dispatches a dev deployment (see below)
+- **Build Image** — builds the Docker image; on `main`, pushes it to GHCR
 
 ## Deployment
 
-Dev is deployed continuously: every push to `main` builds
-`ghcr.io/slaclab/canopy-screen-builder`, then dispatches
-[`slaclab/swapps-deployment`](https://github.com/slaclab/swapps-deployment),
-which owns the Kubernetes manifests and Argo CD syncs them. Pull requests build
-the image without pushing or deploying.
+The builder ships as the `ghcr.io/slaclab/canopy-screen-builder` image. Every
+push to `main` publishes it as `:<short sha>` and `:latest`; pull requests
+build it without pushing. It talks to a Canopy backend for the converter, so
+run it next to one.
 
-```text
-https://dev.example.org/screen-builder
-```
-
-The dispatch needs `APP_ID` and `APP_PRIVATE_KEY` repository secrets; see
-`docs/authentication.md` in `swapps-deployment` for the values and setup.
+SLAC deploys the builder from an internal repository; this repository holds
+only the generic pieces: the image and the notes below.
 
 ### The served app is not built like `pnpm dev`
 
@@ -98,8 +92,8 @@ Two things differ in the container, and both are load-bearing:
 **It is served from a sub-path.** `BASE_PATH` (default `/screen-builder/`) is a
 Docker build arg that sets Vite's `base`, so asset URLs are emitted with that
 prefix, and it is also substituted into the nginx `location` blocks. It must
-match the ingress path in `swapps-deployment`; if the two disagree, every asset
-404s. `pnpm dev` leaves it `/`.
+match the path your ingress or reverse proxy serves the app under; if the two
+disagree, every asset 404s. `pnpm dev` leaves it `/`.
 
 **The converter API key stays server-side.** Locally, `.env.local` sets
 `VITE_CANOPY_API_KEY` and the browser sends `X-API-Key` itself. That is not
