@@ -45,24 +45,12 @@ running Canopy: copy `.env.example` to `.env.local` and set
 | `pnpm format`        | Format source files with Prettier           |
 | `pnpm format:check`  | Check formatting without writing            |
 
-## Documentation
-
-The `docs/` directory contains a [Zensical](https://zensical.org) documentation site. To preview it locally:
-
-```sh
-uv sync
-uv run zensical serve
-```
-
-Docs are automatically built and deployed to GitHub Pages on pushes to `main`.
-
 ## CI
 
 These GitHub Actions workflows run on pull requests and pushes to `main`:
 
 - **Lint & Format** — ESLint, Prettier, and TypeScript type-check
 - **Test** — Vitest test suite
-- **Build & Deploy Documentation** — builds the Zensical docs site and deploys to GitHub Pages
 - **Build Image** — builds the Docker image; on `main`, pushes it to GHCR
 
 ## Deployment
