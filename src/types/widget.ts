@@ -137,6 +137,7 @@ export interface WidgetProps {
   borderColor?: string;
   fontSize?: number;
   fontFamily?: string;
+  fitText?: boolean;
   opacity?: number;
 
   // Alarm
