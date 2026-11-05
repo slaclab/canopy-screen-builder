@@ -9,17 +9,11 @@ RUN corepack enable
 WORKDIR /app
 
 # Copy manifests first so the install layer caches independently of source edits.
-# .npmrc points @slaclab at GitHub Packages and expands NODE_AUTH_TOKEN.
-COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 
-# @slaclab/canopy-screen-ir comes from npm.pkg.github.com, which requires a token
-# even for public packages (unlike GHCR container pulls), so the install cannot be
-# anonymous. Mounted as a BuildKit secret rather than a build arg: an ARG would be
-# readable in `docker history` and `docker inspect`. The secret exists only for
-# this RUN and never lands in a layer.
+# @slaclab/canopy-screen-ir comes from the public npm registry, so the install
+# needs no token.
 RUN --mount=type=cache,id=pnpm,target=/pnpm/store \
-    --mount=type=secret,id=node_auth_token \
-    NODE_AUTH_TOKEN="$(cat /run/secrets/node_auth_token)" \
     pnpm install --frozen-lockfile
 
 COPY . .

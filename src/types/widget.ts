@@ -247,8 +247,8 @@ export interface ScreenMeta {
   version: string;
   theme?: 'white' | 'g10' | 'g90' | 'g100';
   /**
-   * Screen-level Fox formula declarations (the canonical IR `formulas[]`),
-   * referenced by `fox://<name>` from channel props and rules. Author-facing
+   * Screen-level formula declarations (the canonical IR `formulas[]`),
+   * referenced by `formula://<name>` from channel props and rules. Author-facing
    * and round-tripped through eject; omitted when the screen has none.
    */
   formulas?: FormulaDeclaration[];

@@ -69,7 +69,7 @@ describe('importScreenJSON', () => {
     expect(rule!.expressions[0]).toEqual({ condition: '{0} > 1', value: '#ff0000' });
     expect(rule!.expressions[1]).toEqual({ condition: '{1} > 100', value: '#ffff00' });
     expect(rule!.expressions.at(-1)).toEqual({ condition: 'true', value: '#ffffff' });
-    expect(rule!.pvs.map((p) => p.name)).toEqual(['${P}:SEVR', 'fox://sum']);
+    expect(rule!.pvs.map((p) => p.name)).toEqual(['${P}:SEVR', 'formula://sum']);
   });
 
   it('drops formula-driven rules and reports them', () => {

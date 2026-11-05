@@ -38,16 +38,7 @@ Requires [pnpm](https://pnpm.io/installation).
 pnpm install
 ```
 
-#### GitHub Packages authentication
-
-`@slaclab/canopy-screen-ir` is published to [GitHub Packages](https://docs.github.com/en/packages), not the public npm registry. `.npmrc` reads the token from `NODE_AUTH_TOKEN`, so set it to a GitHub token with `read:packages` scope before installing:
-
-```sh
-export NODE_AUTH_TOKEN="$(gh auth token)"   # or a personal access token
-pnpm install
-```
-
-In CI, the workflow's built-in `secrets.GITHUB_TOKEN` supplies this (the jobs request `packages: read`); no extra secret is needed.
+`@slaclab/canopy-screen-ir` comes from the public npm registry (0.3.0 and later), so no token or `.npmrc` is needed.
 
 ## Development
 

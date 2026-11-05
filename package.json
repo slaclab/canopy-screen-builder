@@ -27,7 +27,7 @@
     "@ibm/plex-sans": "^1.1.0",
     "@ibm/plex-serif": "^1.1.0",
     "@monaco-editor/react": "^4.7.0",
-    "@slaclab/canopy-screen-ir": "^0.1.0",
+    "@slaclab/canopy-screen-ir": "^0.3.0",
     "echarts": "^6.1.0",
     "echarts-for-react": "^3.0.6",
     "immer": "^11.1.4",

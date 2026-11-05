@@ -13,7 +13,6 @@ jobs:
 
     permissions:
       contents: read
-      packages: read
 
     steps:
       - name: Checkout code
@@ -33,8 +32,6 @@ jobs:
           node-version: 23.11.0
           cache: pnpm
       - run: pnpm install
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run ESLint
         run: pnpm run lint
