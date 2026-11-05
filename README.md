@@ -1,44 +1,34 @@
-# EED SWApps React Template
+# canopy-screen-builder
 
-A template repository for React projects in the EED Software Applications Group at SLAC National Accelerator Laboratory.
+A drag-and-drop editor for control-system screens. Lay out widgets bound to
+EPICS process variables on a canvas, set their properties, and save the result
+as a screen IR document (`*.screen.json`) that
+[canopy-screen-runtime](https://github.com/slaclab/canopy-screen-runtime)
+renders.
 
-## What's included
-
-- **React 19** with **TypeScript**
-- **Vite** for fast dev server and builds
-- **Vitest** + **React Testing Library** for unit/integration tests
-- **ESLint** + **Prettier** + **Husky** pre-commit hooks for consistent code style
-- **Zensical** (MkDocs-based) documentation site with GitHub Pages deployment
-- GitHub Actions workflows for lint, type-check, test, and docs deployment
+- Widget palette, canvas with grid and snapping, component tree and property
+  inspector, built on IBM's [Carbon](https://carbondesignsystem.com) components
+- Several screens open at once, in tabs, with undo and redo
+- Screen macros (`${P}:VAL`) and screen-level formulas
+- Live preview against simulated PV data
+- Save and open `*.screen.json`, validated against the screen IR schema from
+  [`@slaclab/canopy-screen-ir`](https://www.npmjs.com/package/@slaclab/canopy-screen-ir)
+- Import legacy EDM (`.edl`) and PyDM (`.ui`) screens through the converter API
+  of a [Canopy](https://github.com/slaclab/canopy) backend
+- Export a screen as React TSX (one way)
 
 ## Getting started
 
-### Create a new project from this template
-
-Click **Use this template** on GitHub, or clone and reinitialize:
-
-```sh
-git clone https://github.com/slaclab/eed-swapps-react-template.git my-app
-cd my-app
-git remote remove origin
-```
-
-### After cloning, update the project name
-
-1. `package.json` — update `name` and `description`
-2. `index.html` — update `<title>`
-3. `pyproject.toml` — update `name` and `description`
-4. `zensical.toml` — update `site_name`, `site_description`, `repo_name`, `repo_url`, and the social link
-
-### Install dependencies
-
-Requires [pnpm](https://pnpm.io/installation).
+Requires Node.js and [pnpm](https://pnpm.io/installation).
 
 ```sh
 pnpm install
+pnpm dev
 ```
 
-`@slaclab/canopy-screen-ir` comes from the public npm registry (0.3.0 and later), so no token or `.npmrc` is needed.
+The editor works without a backend. Importing `.edl` and `.ui` files needs a
+running Canopy: copy `.env.example` to `.env.local` and set
+`VITE_CANOPY_BASE_URL` and `VITE_CANOPY_API_KEY` there.
 
 ## Development
 
@@ -55,41 +45,23 @@ pnpm install
 | `pnpm format`        | Format source files with Prettier           |
 | `pnpm format:check`  | Check formatting without writing            |
 
-## Documentation
-
-The `docs/` directory contains a [Zensical](https://zensical.org) documentation site. To preview it locally:
-
-```sh
-uv sync
-uv run zensical serve
-```
-
-Docs are automatically built and deployed to GitHub Pages on pushes to `main`.
-
 ## CI
 
 These GitHub Actions workflows run on pull requests and pushes to `main`:
 
 - **Lint & Format** — ESLint, Prettier, and TypeScript type-check
 - **Test** — Vitest test suite
-- **Build & Deploy Documentation** — builds the Zensical docs site and deploys to GitHub Pages
-- **Build image and deploy dev** — builds the Docker image; on `main`, pushes it
-  to GHCR and dispatches a dev deployment (see below)
+- **Build Image** — builds the Docker image; on `main`, pushes it to GHCR
 
 ## Deployment
 
-Dev is deployed continuously: every push to `main` builds
-`ghcr.io/slaclab/canopy-screen-builder`, then dispatches
-[`slaclab/swapps-deployment`](https://github.com/slaclab/swapps-deployment),
-which owns the Kubernetes manifests and Argo CD syncs them. Pull requests build
-the image without pushing or deploying.
+The builder ships as the `ghcr.io/slaclab/canopy-screen-builder` image. Every
+push to `main` publishes it as `:<short sha>` and `:latest`; pull requests
+build it without pushing. It talks to a Canopy backend for the converter, so
+run it next to one.
 
-```text
-https://dev.example.org/screen-builder
-```
-
-The dispatch needs `APP_ID` and `APP_PRIVATE_KEY` repository secrets; see
-`docs/authentication.md` in `swapps-deployment` for the values and setup.
+SLAC deploys the builder from an internal repository; this repository holds
+only the generic pieces: the image and the notes below.
 
 ### The served app is not built like `pnpm dev`
 
@@ -98,8 +70,8 @@ Two things differ in the container, and both are load-bearing:
 **It is served from a sub-path.** `BASE_PATH` (default `/screen-builder/`) is a
 Docker build arg that sets Vite's `base`, so asset URLs are emitted with that
 prefix, and it is also substituted into the nginx `location` blocks. It must
-match the ingress path in `swapps-deployment`; if the two disagree, every asset
-404s. `pnpm dev` leaves it `/`.
+match the path your ingress or reverse proxy serves the app under; if the two
+disagree, every asset 404s. `pnpm dev` leaves it `/`.
 
 **The converter API key stays server-side.** Locally, `.env.local` sets
 `VITE_CANOPY_API_KEY` and the browser sends `X-API-Key` itself. That is not
@@ -132,3 +104,12 @@ Runtime environment variables:
 The app serves even when Canopy is unreachable — nginx resolves the upstream per
 request, so conversions return 502 while static content keeps working, rather
 than the container failing to start.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues as described in
+[SECURITY.md](SECURITY.md), not in public issues.
+
+## License
+
+See [LICENSE.md](LICENSE.md).

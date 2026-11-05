@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "description": "Drag-and-drop screen builder for Canopy control system displays",
+  "license": "SEE LICENSE IN LICENSE.md",
   "type": "module",
   "scripts": {
     "dev": "vite",

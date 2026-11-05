@@ -37,8 +37,7 @@ server {
 
     # The converter proxy. The browser calls this same-origin path (it is what
     # VITE_CANOPY_BASE_URL points at) and nginx attaches the API key, so the key
-    # stays server-side instead of being inlined into the JS bundle. Mirrors how
-    # apps/trace reaches canopy-api in the swapps-deployment repo.
+    # stays server-side instead of being inlined into the JS bundle.
     location ${BASE_PATH}canopy/ {
         # Resolve the upstream per request instead of once at startup. A literal
         # hostname in proxy_pass is resolved during config load, which makes

@@ -1,4 +1,4 @@
-name: Build image and deploy dev
+name: Build Image
 
 on:
   pull_request:
@@ -8,31 +8,19 @@ on:
   workflow_dispatch:
 
 jobs:
-  # The build runs here rather than through swapps-ci-helpers'
-  # build-image-and-dispatch.yml. It needed a BuildKit secret while
-  # @slaclab/canopy-screen-ir came from GitHub Packages; since 0.3.0 it comes
-  # from the public npm registry, so the shared workflow would now do. Only the
-  # dispatch step is shared, the same split slaclab/canopy uses.
+  # Builds the image only. Deploying it is up to whoever runs it: pull the
+  # `:<short sha>` or `:latest` tag from GHCR.
   build:
     permissions:
       contents: read
       packages: write
     runs-on: ubuntu-latest
-    outputs:
-      image_tag: ${{ steps.vars.outputs.image_tag }}
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-
-      - name: Set deployable image tag
-        id: vars
-        # Matches the `type=sha,prefix=sha-` tag produced by metadata-action
-        # below, and the `sha-<short>` convention the dev overlay in
-        # swapps-deployment is updated with.
-        run: echo "image_tag=sha-${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -50,8 +38,10 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302 # v6.2.0
         with:
           images: ghcr.io/${{ github.repository }}
+          # The bare short SHA, as slaclab/canopy tags its images, plus `latest`
+          # on main.
           tags: |
-            type=sha,prefix=sha-
+            type=sha,prefix=
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push
@@ -60,31 +50,14 @@ jobs:
           context: .
           file: Dockerfile
           # Pull requests build without pushing; pushes and manual runs on main
-          # publish and go on to dispatch the deployment.
+          # publish.
           push: ${{ github.event_name != 'pull_request' && github.ref == 'refs/heads/main' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           # BASE_PATH is baked into the bundle's asset URLs by Vite and rendered
-          # into the nginx location blocks, so it must match the ingress path in
-          # swapps-deployment (apps/canopy-screen-builder/base/ingress.yaml).
-          # Changing the route means changing it in both repos.
+          # into the nginx location blocks, so it must match the path the app is
+          # served under. Changing it means changing the ingress or proxy too.
           build-args: |
             BASE_PATH=/screen-builder/
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  dispatch-swapps-dev:
-    name: Deploy Kubernetes dev
-    needs: build
-    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
-    uses: slaclab/swapps-ci-helpers/.github/workflows/dispatch-swapps-deployment.yml@73e6ba924aac5f822b050bd6bed12b0e45c64034 # v1.1.0
-    with:
-      app: canopy-screen-builder
-      environment: dev
-      image: ghcr.io/${{ github.repository }}:${{ needs.build.outputs.image_tag }}
-      deployment-owner: slaclab
-      deployment-repo: swapps-deployment
-      deploy-ref: refs/heads/main
-    secrets:
-      APP_ID: ${{ secrets.APP_ID }}
-      APP_PRIVATE_KEY: ${{ secrets.APP_PRIVATE_KEY }}
