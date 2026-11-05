@@ -8,8 +8,12 @@
 //  - **Nothing is silently dropped.** `unknown-widget` (and any IR type not in
 //    the table) becomes a `Rectangle` placeholder that preserves the original
 //    class + props, and is reported. This mirrors the converter's D11 contract.
-//    On save, an unknown-widget placeholder normalizes back to `'rectangle'`,
-//    keeping `originalClass`/`originalProps` as plain props.
+//    The node's own type and props ride along in `Widget.ir`, so a save writes
+//    the original node back instead of a rectangle.
+//  - **A save gives back what was opened.** Whatever the model cannot hold —
+//    the IR type where several share one builder type, a prop value a mapper
+//    could not coerce — goes into `Widget.ir` (see `WidgetIRPassthrough`) for
+//    `exportScreenJSON.ts` to re-emit.
 //  - **Eject must not break.** `Widget.type` is the closed `WidgetType` union
 //    that `generateTSX` emits verbatim, so every mapping target is a real
 //    catalog type — never a raw IR id.
@@ -29,7 +33,7 @@
 // `pv-button`) must still pass through on types that don't (`pv-label`).
 
 import type { WidgetNode } from '@slaclab/canopy-screen-ir';
-import type { Action, WidgetType, WidgetProps } from '../../types/widget';
+import type { Action, WidgetIRPassthrough, WidgetType, WidgetProps } from '../../types/widget';
 
 export interface MapResult {
   sbType: WidgetType;
@@ -45,6 +49,8 @@ export interface MapResult {
    * with no SB mapping). `originalClass` is the preserved source class.
    */
   unknown?: { originalClass: string };
+  /** IR data with no model home, to be stored on `Widget.ir`. */
+  ir?: WidgetIRPassthrough;
 }
 
 // ── Coercion helpers (mirror parseTSX's numProp style) ───────────────────────
@@ -89,7 +95,26 @@ interface TypeMapEntry {
   /** IR prop keys this mapper reads; the generic pass-through skips these. */
   consumes: readonly string[];
   degradeReason?: string;
+  /**
+   * Set on IR types the exporter cannot tell from the model alone because
+   * another IR type maps to the same builder type. The importer then records
+   * the IR type on `Widget.ir.type` and a save re-emits it.
+   */
+  alias?: {
+    /** Model prop key -> IR prop key, applied on a save under this type. */
+    renames: Readonly<Record<string, string>>;
+    /** Only these nodes need the type recorded (default: every node of the type). */
+    when?: (ir: IRProps) => boolean;
+  };
+  /**
+   * The type's model key is `pvName` and it saves as `pvName`, but a
+   * hand-authored `pv` is read as one (see `copyPvFlavoredVerbatim`).
+   */
+  pvAlias?: boolean;
 }
+
+/** The `open_display` target a `related-display-button` imports with. */
+export const RELATED_DISPLAY_TARGET = 'window';
 
 const TYPE_MAP: Record<string, TypeMapEntry> = {
   'text-label': {
@@ -133,6 +158,9 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
       put(p, 'releaseValue', ir.releaseValue);
     },
     consumes: ['pv', 'label', 'pressValue', 'releaseValue'],
+    // A pv-button with no `pv` (the converter emits these for a button that
+    // only reads a state PV) would otherwise save as `regular-button`.
+    alias: { renames: { pvName: 'pv' }, when: (ir) => str(ir.pv) === undefined },
   },
   'regular-button': {
     sbType: 'PVButton',
@@ -286,6 +314,7 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
       p.layoutMode = 'absolute';
     },
     consumes: [],
+    alias: { renames: {} },
   },
   'related-display-button': {
     sbType: 'PVButton',
@@ -295,6 +324,7 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
     consumes: ['label', 'file', 'macros'],
     degradeReason:
       'related-display navigation carried as an open_display action; review target window behavior',
+    alias: { renames: {} },
   },
   // Containers degrade to Group: children + z-order survive, chrome does not.
   frame: {
@@ -304,6 +334,7 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
     },
     consumes: [],
     degradeReason: 'frame border/shadow chrome is not represented; rendered as a plain Group',
+    alias: { renames: {} },
   },
   'group-box': {
     sbType: 'Group',
@@ -313,6 +344,7 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
     },
     consumes: ['title'],
     degradeReason: 'group-box title chrome is not represented; preserved as label on a plain Group',
+    alias: { renames: { label: 'title' } },
   },
   'scroll-area': {
     sbType: 'Group',
@@ -322,6 +354,7 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
     consumes: [],
     degradeReason:
       'scroll-area scrolling/clipping is not represented; children laid out absolutely',
+    alias: { renames: {} },
   },
   tabs: {
     sbType: 'Group',
@@ -330,6 +363,7 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
     },
     consumes: [],
     degradeReason: 'tabs structure is not represented; pages flattened into a single Group',
+    alias: { renames: {} },
   },
 
   // ── Identity entries for SB-native types ──────────────────────────────────
@@ -374,31 +408,37 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
     sbType: 'PVToggle',
     map: (ir, p) => copyPvFlavoredVerbatim(ir, p),
     consumes: [],
+    pvAlias: true,
   },
   'pv-spinbox': {
     sbType: 'PVSpinbox',
     map: (ir, p) => copyPvFlavoredVerbatim(ir, p),
     consumes: [],
+    pvAlias: true,
   },
   'pv-tabs': {
     sbType: 'PVTabs',
     map: (ir, p) => copyPvFlavoredVerbatim(ir, p),
     consumes: [],
+    pvAlias: true,
   },
   'pv-gauge': {
     sbType: 'PVGauge',
     map: (ir, p) => copyPvFlavoredVerbatim(ir, p),
     consumes: [],
+    pvAlias: true,
   },
   'pv-tank': {
     sbType: 'PVTank',
     map: (ir, p) => copyPvFlavoredVerbatim(ir, p),
     consumes: [],
+    pvAlias: true,
   },
   'pv-thermometer': {
     sbType: 'PVThermometer',
     map: (ir, p) => copyPvFlavoredVerbatim(ir, p),
     consumes: [],
+    pvAlias: true,
   },
 };
 
@@ -434,7 +474,7 @@ function copyPvFlavoredVerbatim(ir: IRProps, props: WidgetProps): void {
 export function mapWidget(node: WidgetNode): MapResult {
   const ir = (node.props ?? {}) as IRProps;
 
-  if (node.type === 'unknown-widget' || !(node.type in TYPE_MAP)) {
+  if (!isKnownIRType(node.type)) {
     return mapUnknown(node, ir);
   }
 
@@ -443,6 +483,8 @@ export function mapWidget(node: WidgetNode): MapResult {
   entry.map(ir, props);
 
   const actions: Action[] = [];
+  // Consumed IR keys whose value now lives in a synthesized action.
+  const inAction = new Set<string>();
 
   // related-display-button click opens another screen — carry that as an SB
   // open_display Action rather than props on the button.
@@ -450,14 +492,15 @@ export function mapWidget(node: WidgetNode): MapResult {
     const file = str(ir.file);
     if (file) {
       const macros = ir.macros;
+      const hasMacros = macros !== null && typeof macros === 'object';
       actions.push({
         type: 'open_display',
         file,
-        target: 'window',
-        ...(macros && typeof macros === 'object'
-          ? { macros: macros as Record<string, string> }
-          : {}),
+        target: RELATED_DISPLAY_TARGET,
+        ...(hasMacros ? { macros: macros as Record<string, string> } : {}),
       });
+      inAction.add('file');
+      if (hasMacros) inAction.add('macros');
     }
   }
 
@@ -468,13 +511,65 @@ export function mapWidget(node: WidgetNode): MapResult {
     if (!consumed.includes(key) && !(key in props)) props[key] = value;
   }
 
-  return {
+  const passthrough: WidgetIRPassthrough = {};
+  const synthesized: WidgetProps = {};
+  entry.map({}, synthesized);
+
+  // A consumed key is lost when its mapper coerces the value to nothing
+  // (pv-label `precision: "fromPV"`, a `${MACRO}` where a number goes). Probe
+  // the mapper with that key alone: if it writes no more than it does for an
+  // empty bag, the value has no model home and rides in the passthrough.
+  const unrepresented: Record<string, unknown> = {};
+  for (const key of entry.consumes) {
+    const value = ir[key];
+    if (value === undefined || inAction.has(key)) continue;
+    const probe: WidgetProps = {};
+    entry.map({ [key]: value }, probe);
+    if (sameShallow(probe, synthesized)) unrepresented[key] = value;
+  }
+  if (Object.keys(unrepresented).length > 0) passthrough.props = unrepresented;
+
+  if (entry.alias && (entry.alias.when?.(ir) ?? true)) {
+    passthrough.type = node.type;
+    if (Object.keys(synthesized).length > 0) passthrough.synthesized = synthesized;
+  }
+  if (entry.pvAlias && typeof ir.pv === 'string' && ir.pvName === undefined) {
+    // Read into `pvName`; remember the key so a save writes `pv` again
+    // (and keep the generic pass-through from leaving a second copy).
+    delete props.pv;
+    passthrough.renamed = { pvName: 'pv' };
+  }
+
+  const result: MapResult = {
     sbType: entry.sbType,
     props,
     actions,
     droppedProps: [],
     degradeReason: entry.degradeReason,
   };
+  if (Object.keys(passthrough).length > 0) result.ir = passthrough;
+  return result;
+}
+
+function sameShallow(a: WidgetProps, b: WidgetProps): boolean {
+  const keys = Object.keys(a);
+  return keys.length === Object.keys(b).length && keys.every((k) => Object.is(a[k], b[k]));
+}
+
+/**
+ * How a save re-emits an imported alias type (see `TypeMapEntry.alias`), or
+ * `undefined` when `irType` is not one. Read by `exportScreenJSON.ts`.
+ */
+export function aliasExport(
+  irType: string
+): { sbType: WidgetType; renames: Readonly<Record<string, string>> } | undefined {
+  const entry = Object.hasOwn(TYPE_MAP, irType) ? TYPE_MAP[irType] : undefined;
+  return entry?.alias ? { sbType: entry.sbType, renames: entry.alias.renames } : undefined;
+}
+
+/** Whether the builder has a mapping for `irType` (anything else imports as a placeholder). */
+export function isKnownIRType(irType: string): boolean {
+  return irType !== 'unknown-widget' && Object.hasOwn(TYPE_MAP, irType);
 }
 
 function mapUnknown(node: WidgetNode, ir: IRProps): MapResult {
@@ -492,5 +587,8 @@ function mapUnknown(node: WidgetNode, ir: IRProps): MapResult {
     droppedProps: [],
     degradeReason: `unmapped widget '${originalClass}' rendered as a placeholder`,
     unknown: { originalClass },
+    // The whole node is opaque to the builder: keep its type and props as
+    // they came, and mark everything the placeholder shows as invented.
+    ir: { type: node.type, props: { ...ir }, synthesized: { ...props } },
   };
 }

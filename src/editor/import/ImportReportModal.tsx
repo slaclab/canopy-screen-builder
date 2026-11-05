@@ -49,6 +49,7 @@ export function ImportReportModal() {
     report.degradedWidgets.length === 0 &&
     report.droppedProps.length === 0 &&
     report.droppedRules.length === 0 &&
+    report.keptRules.length === 0 &&
     report.warnings.length === 0;
 
   return (
@@ -78,6 +79,13 @@ export function ImportReportModal() {
           {report.droppedRules.length > 0 && (
             <Section title="Dropped rules">
               {report.droppedRules.map((r, i) => (
+                <ListItem key={i}>{r}</ListItem>
+              ))}
+            </Section>
+          )}
+          {report.keptRules.length > 0 && (
+            <Section title="Rules kept but not editable">
+              {report.keptRules.map((r, i) => (
                 <ListItem key={i}>{r}</ListItem>
               ))}
             </Section>

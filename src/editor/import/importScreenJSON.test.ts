@@ -72,10 +72,14 @@ describe('importScreenJSON', () => {
     expect(rule!.pvs.map((p) => p.name)).toEqual(['${P}:SEVR', 'formula://sum']);
   });
 
-  it('drops formula-driven rules and reports them', () => {
-    const rules = screen.widgets['w-002'].rules;
-    expect(rules.find((r) => r.name === 'visible-when')).toBeUndefined();
-    expect(report.droppedRules.some((r) => r.includes('visible-when'))).toBe(true);
+  it('keeps formula-driven rules off the editable rule list, carried for save, and reports them', () => {
+    const widget = screen.widgets['w-002'];
+    expect(widget.rules.find((r) => r.name === 'visible-when')).toBeUndefined();
+    expect(widget.ir?.rules?.map((k) => (k.rule as { name: string }).name)).toEqual([
+      'visible-when',
+    ]);
+    expect(report.keptRules.some((r) => r.includes('visible-when'))).toBe(true);
+    expect(report.droppedRules).toEqual([]);
   });
 
   it('reports degraded container widgets', () => {

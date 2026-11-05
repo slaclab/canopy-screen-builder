@@ -91,3 +91,65 @@ describe('mapWidget polygon', () => {
     expect(r.props.closed).toBe(true);
   });
 });
+
+describe('mapWidget IR passthrough', () => {
+  it('carries a consumed value the mapper cannot coerce, instead of dropping it', () => {
+    const r = mapWidget(node('pv-label', { pv: 'X:RBV', precision: 'fromPV' }));
+    expect('precision' in r.props).toBe(false);
+    expect(r.ir).toEqual({ props: { precision: 'fromPV' } });
+  });
+
+  it('carries nothing when every value has a model home', () => {
+    const r = mapWidget(node('pv-label', { pv: 'X:RBV', precision: 2, showUnits: true }));
+    expect(r.ir).toBeUndefined();
+  });
+
+  it('carries a macro where the model wants a number', () => {
+    const r = mapWidget(node('pv-progress-bar', { pv: 'X', min: '${LO}', max: 10 }));
+    expect(r.props.maxValue).toBe(10);
+    expect('minValue' in r.props).toBe(false);
+    expect(r.ir).toEqual({ props: { min: '${LO}' } });
+  });
+
+  it('records the IR type where several share a builder type', () => {
+    expect(mapWidget(node('related-display-button', { file: 'a' })).ir).toEqual({
+      type: 'related-display-button',
+    });
+    expect(mapWidget(node('frame', {})).ir).toEqual({
+      type: 'frame',
+      synthesized: { layoutMode: 'absolute' },
+    });
+    // A pv-button is recognisable by its pv; only one without needs the record.
+    expect(mapWidget(node('pv-button', { pv: 'X:CMD' })).ir).toBeUndefined();
+    expect(mapWidget(node('pv-button', { readbackPV: 'X:STATE' })).ir).toEqual({
+      type: 'pv-button',
+    });
+  });
+
+  it('carries a related display target that is not a usable file name', () => {
+    const r = mapWidget(node('related-display-button', { file: '', macros: { A: 'b' } }));
+    expect(r.actions).toEqual([]);
+    expect(r.ir).toEqual({
+      type: 'related-display-button',
+      props: { file: '', macros: { A: 'b' } },
+    });
+  });
+
+  it('keeps an unknown node whole and marks the placeholder props as invented', () => {
+    const r = mapWidget(
+      node('unknown-widget', { originalClass: 'menuMuxClass', originalProps: { controlPv: 'X' } })
+    );
+    expect(r.sbType).toBe('Rectangle');
+    expect(r.ir?.type).toBe('unknown-widget');
+    expect(r.ir?.props).toEqual({
+      originalClass: 'menuMuxClass',
+      originalProps: { controlPv: 'X' },
+    });
+    expect(Object.keys(r.ir?.synthesized ?? {}).sort()).toEqual([
+      'fill',
+      'label',
+      'originalClass',
+      'originalProps',
+    ]);
+  });
+});

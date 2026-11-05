@@ -5,22 +5,35 @@
 // the inverse of `../import/importScreenJSON.ts` + `../import/irWidgetMap.ts` —
 // every rename/consumption table there has a mirror-image table here.
 //
-// ── Normalization contract ───────────────────────────────────────────────────
-// The FIRST save of any screen canonicalizes it, even with no edits:
-//  - Converter-flavored container types (`frame` / `group-box` / `scroll-area`
-//    / `tabs`) all degrade to SB `Group` on import, so they all re-emit as the
-//    single canonical `'group'` IR type — the original chrome distinction is
-//    gone for good the moment the screen opens in SB.
-//  - `related-display-button` degrades to `PVButton` + a synthesized
-//    `open_display` action on import, so it re-emits as `'regular-button'`
-//    with the action carried in the reserved `actions` prop (see below) —
-//    never as `related-display-button` again.
-//  - An `unknown-widget` placeholder imports as a `Rectangle` carrying
-//    `originalClass`/`originalProps` as plain props; it re-emits as a plain
-//    `'rectangle'`, keeping those props verbatim (no special-casing on
-//    export — they ride through like any other prop). Its converter-stamped
-//    node-level `warnings` ride on `Widget.warnings` — like every other
-//    type — and re-emit at the node level, not as a prop.
+// ── Round-trip contract ──────────────────────────────────────────────────────
+// Opening a document and saving it with no edits gives back the same document
+// (the Screen IR contract), up to key order and `metadata.source`:
+//  - Converter-flavored types that share a builder type with another IR type
+//    (`frame` / `group-box` / `scroll-area` / `tabs` / `qwidget-container` →
+//    `Group`; `related-display-button` and a `pv`-less `pv-button` →
+//    `PVButton`) re-emit under the type they were imported from, recorded on
+//    `Widget.ir.type`, for as long as the widget still fits it (see
+//    `preservedType`). A `related-display-button`'s synthesized
+//    `open_display` action goes back to its `file`/`macros` props.
+//  - An `unknown-widget` placeholder (or a node of a type the builder does
+//    not know at all) re-emits as the node it was, type and props, from
+//    `Widget.ir`. Its node-level `warnings` ride on `Widget.warnings` like
+//    every other type's.
+//  - IR prop values and rules the model cannot hold (`Widget.ir.props`,
+//    `Widget.ir.rules`) are written back verbatim unless the model now
+//    supplies that key.
+//  - Defaults are not written: a widget `name` that is still the generated
+//    one, and editor chrome (`gridSize`, `showGrid`, ...) still at the
+//    new-screen default, stay out of the document.
+//  - `metadata.source` becomes `{ type: 'screen-builder', savedAt }` plus the
+//    provenance of the opened document (`sourceFile`, `convertedAt`, and the
+//    converter's source type as `origin`).
+//
+// A widget created in the builder has no `Widget.ir` and saves canonically:
+// `Group` → `'group'`, a `PVButton` with actions → `'regular-button'` with the
+// `actions` carrier, and so on.
+//
+// Always, for every save:
 //  - Prop keys within each node (and the root) are emitted ALPHABETICALLY
 //    SORTED, regardless of insertion order.
 //  - Sibling arrays (root children, and each container's children) are
@@ -53,6 +66,9 @@
 import { SCHEMA_VERSION, validate } from '@slaclab/canopy-screen-ir';
 import type { ScreenJSON } from '@slaclab/canopy-screen-ir';
 import type { Rule, ScreenModel, Widget, WidgetType } from '../../types/widget';
+import { createDefaultScreenMeta } from '../../types/widget';
+import { aliasExport, isKnownIRType, RELATED_DISPLAY_TARGET } from '../import/irWidgetMap';
+import { defaultWidgetName } from '../import/importScreenJSON';
 
 /** Thrown when the assembled document fails `@slaclab/canopy-screen-ir`'s `validate()`. */
 export class ExportError extends Error {
@@ -207,41 +223,135 @@ const TYPE_EXPORT_TABLE: Record<WidgetType, TypeExport> = {
   PVThermometer: { irType: () => 'pv-thermometer', renames: NO_RENAMES },
 };
 
+/** Order-insensitive (object keys) structural equality for plain JSON values. */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) return false;
+  if (Array.isArray(a) !== Array.isArray(b)) return false;
+  if (Array.isArray(a) && Array.isArray(b)) {
+    return a.length === b.length && a.every((v, i) => deepEqual(v, b[i]));
+  }
+  const ka = Object.keys(a);
+  const kb = Object.keys(b);
+  return (
+    ka.length === kb.length &&
+    ka.every((k) => k in b && deepEqual((a as PropBag)[k], (b as PropBag)[k]))
+  );
+}
+
+/**
+ * The IR type to save a widget under when it was imported from a type the
+ * model alone cannot reproduce (`Widget.ir.type`), or `undefined` to fall
+ * back to the canonical type for its builder type. The recorded type only
+ * holds while the widget still fits it:
+ *  - `related-display-button`: no control PV, and its actions are exactly what
+ *    the type can say — nothing, or one `open_display` with the import's
+ *    target. Any other edit to the actions saves as `regular-button` with the
+ *    `actions` carrier, which can hold them.
+ *  - an unknown type: the widget is still the `Rectangle` placeholder.
+ *  - any other alias: the builder type is still the one it imports as.
+ */
+function preservedType(widget: Widget): string | undefined {
+  const irType = widget.ir?.type;
+  if (irType === undefined) return undefined;
+  if (!isKnownIRType(irType)) return widget.type === 'Rectangle' ? irType : undefined;
+  const alias = aliasExport(irType);
+  if (!alias || alias.sbType !== widget.type) return undefined;
+  if (irType === 'related-display-button') {
+    if (widget.props.pvName !== undefined) return undefined;
+    const [first, ...others] = widget.actions;
+    if (first === undefined) return irType;
+    if (others.length > 0 || first.type !== 'open_display') return undefined;
+    if (first.target !== RELATED_DISPLAY_TARGET) return undefined;
+  }
+  return irType;
+}
+
 /**
  * Build the IR `type` + renamed props bag for one widget — the inverse of
  * `irWidgetMap.ts`'s per-type mapper. Carrier props are appended by the
  * caller afterward; this only handles the rename table + verbatim
- * pass-through.
+ * pass-through, plus whatever `Widget.ir` carries for a lossless save.
  */
-function exportTypeAndProps(widget: Widget): { irType: string; props: PropBag } {
+function exportTypeAndProps(widget: Widget): {
+  irType: string;
+  props: PropBag;
+  /** The widget's actions are already in `props` (as `file`/`macros`). */
+  actionsInProps: boolean;
+} {
+  const ir = widget.ir;
+  const preserved = preservedType(widget);
   const entry = TYPE_EXPORT_TABLE[widget.type];
-  const irType = entry.irType(widget);
+  const irType = preserved ?? entry.irType(widget);
   const props: PropBag = {};
+  let actionsInProps = false;
+
+  if (preserved !== undefined && !isKnownIRType(preserved)) {
+    // Opaque node: its own props, then whatever was changed on the
+    // placeholder since (a prop still holding its invented value is not
+    // part of the document).
+    Object.assign(props, ir?.props);
+    for (const [key, value] of Object.entries(widget.props)) {
+      if (ir?.synthesized && key in ir.synthesized && deepEqual(value, ir.synthesized[key])) {
+        continue;
+      }
+      put(props, key, value);
+    }
+    return { irType, props, actionsInProps };
+  }
+
+  const renames: Record<string, string> = {
+    ...(preserved !== undefined ? aliasExport(preserved)?.renames : entry.renames),
+    ...ir?.renamed,
+  };
 
   // Renamed keys first, so a same-named literal prop (checked below) never
   // clobbers a deliberate rename.
-  for (const [sbKey, irKey] of Object.entries(entry.renames)) {
+  for (const [sbKey, irKey] of Object.entries(renames)) {
     if (widget.props[sbKey] !== undefined) put(props, irKey, widget.props[sbKey]);
   }
 
   // Verbatim pass-through: every prop not itself a rename SOURCE, and not
   // already written as a rename TARGET (the "renamed value wins" rule).
-  const renameSources = new Set(Object.keys(entry.renames));
+  const renameSources = new Set(Object.keys(renames));
   for (const [key, value] of Object.entries(widget.props)) {
     if (renameSources.has(key)) continue;
     if (key in props) continue;
+    if (
+      preserved !== undefined &&
+      ir?.synthesized &&
+      key in ir.synthesized &&
+      deepEqual(value, ir.synthesized[key])
+    ) {
+      continue;
+    }
     put(props, key, value);
   }
 
-  return { irType, props };
+  if (preserved === 'related-display-button') {
+    const action = widget.actions[0];
+    if (action?.type === 'open_display') {
+      props.file = action.file;
+      if (action.macros !== undefined) props.macros = deepClone(action.macros);
+    }
+    actionsInProps = true;
+  }
+
+  // IR values the importer had no model prop for: written back as they came,
+  // unless the model now supplies that key.
+  for (const [key, value] of Object.entries(ir?.props ?? {})) {
+    if (!(key in props)) put(props, key, value);
+  }
+
+  return { irType, props, actionsInProps };
 }
 
 // ── Carrier props ────────────────────────────────────────────────────────────
 
 /** Append the reserved carrier props (see header comment) onto a props bag. */
-function addCarrierProps(props: PropBag, widget: Widget): void {
-  props.name = widget.name;
-  if (widget.actions.length > 0) props.actions = deepClone(widget.actions);
+function addCarrierProps(props: PropBag, widget: Widget, actionsInProps: boolean): void {
+  if (widget.name !== defaultWidgetName(widget.type, widget.id)) props.name = widget.name;
+  if (widget.actions.length > 0 && !actionsInProps) props.actions = deepClone(widget.actions);
   if (widget.visible === false) props.visible = false;
   if (
     typeof widget.rotation === 'number' &&
@@ -313,8 +423,8 @@ function exportRule(rule: Rule, widget: Widget, index: number): PropBag {
 // ── Widget node assembly ─────────────────────────────────────────────────────
 
 function buildWidgetNode(widget: Widget, widgets: Record<string, Widget>): PropBag {
-  const { irType, props } = exportTypeAndProps(widget);
-  addCarrierProps(props, widget);
+  const { irType, props, actionsInProps } = exportTypeAndProps(widget);
+  addCarrierProps(props, widget, actionsInProps);
 
   const node: PropBag = {
     id: widget.id,
@@ -333,9 +443,12 @@ function buildWidgetNode(widget: Widget, widgets: Record<string, Widget>): PropB
     node.children = childIds.map((id) => buildWidgetNode(widgets[id], widgets));
   }
 
-  if (widget.rules.length > 0) {
-    node.rules = widget.rules.map((rule, index) => exportRule(rule, widget, index));
+  const rules: unknown[] = widget.rules.map((rule, index) => exportRule(rule, widget, index));
+  // Rules the model cannot hold go back where they were in the node's list.
+  for (const kept of widget.ir?.rules ?? []) {
+    rules.splice(Math.min(kept.index, rules.length), 0, deepClone(kept.rule));
   }
+  if (rules.length > 0) node.rules = rules;
 
   const comment = widget.meta?.comment;
   if (typeof comment === 'string' && comment !== '') {
@@ -357,28 +470,43 @@ function buildRootNode(screen: ScreenModel): PropBag {
   const rootProps: PropBag = {
     width: meta.width,
     height: meta.height,
-    gridSize: meta.gridSize,
-    showGrid: meta.showGrid,
-    snapToGrid: meta.snapToGrid,
-    version: meta.version,
   };
+  // Editor chrome is only written once it differs from a new screen's
+  // default (which is what an import falls back to when the key is absent),
+  // so saving a converted screen does not stamp editor state into it.
+  const defaults = createDefaultScreenMeta();
+  for (const key of EDITOR_CHROME_KEYS) {
+    if (meta[key] !== defaults[key]) put(rootProps, key, meta[key]);
+  }
   // Only emit backgroundColor when the screen pins one; empty/unset means
   // "follow the theme" and shouldn't round-trip as an explicit value.
   put(rootProps, 'backgroundColor', meta.backgroundColor);
   put(rootProps, 'theme', meta.theme);
-  put(rootProps, 'showHorizontalScrollbar', meta.showHorizontalScrollbar);
-  put(rootProps, 'showVerticalScrollbar', meta.showVerticalScrollbar);
+  for (const [key, value] of Object.entries(meta.rootProps ?? {})) {
+    if (!(key in rootProps)) put(rootProps, key, value);
+  }
 
   const childIds = orderByZIndex(rootWidgetIds, widgets);
 
-  return {
-    id: 'root',
+  const root: PropBag = {
+    id: meta.rootId ?? 'root',
     type: 'absolute-canvas',
     props: sortKeys(rootProps),
     geometry: { x: 0, y: 0, width: meta.width, height: meta.height },
     children: childIds.map((id) => buildWidgetNode(widgets[id], widgets)),
   };
+  if (meta.rootWarnings && meta.rootWarnings.length > 0) root.warnings = [...meta.rootWarnings];
+  return root;
 }
+
+const EDITOR_CHROME_KEYS = [
+  'gridSize',
+  'showGrid',
+  'snapToGrid',
+  'version',
+  'showHorizontalScrollbar',
+  'showVerticalScrollbar',
+] as const;
 
 // ── Document assembly ────────────────────────────────────────────────────────
 
@@ -404,7 +532,11 @@ export function exportScreenJSON(screen: ScreenModel, opts?: ExportOptions): Scr
 
   const metadata: PropBag = {
     title: meta.title,
-    source: { type: 'screen-builder', savedAt: opts?.savedAt ?? new Date().toISOString() },
+    source: {
+      ...deepClone(meta.provenance ?? {}),
+      type: 'screen-builder',
+      savedAt: opts?.savedAt ?? new Date().toISOString(),
+    },
     size: { width: meta.width, height: meta.height },
   };
   if (typeof meta.description === 'string' && meta.description !== '') {

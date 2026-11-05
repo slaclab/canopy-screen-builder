@@ -181,6 +181,7 @@ describe('normalizeScreen', () => {
 const EXPECTED_REGISTERED_TYPES: WidgetType[] = [
   'Arc',
   'Ellipse',
+  'EmbeddedScreen',
   'Group',
   'Line',
   'PVButton',
@@ -197,6 +198,7 @@ const EXPECTED_REGISTERED_TYPES: WidgetType[] = [
   'PVTextInput',
   'PVToggle',
   'PVWaveformPlot',
+  'Polygon',
   'Rectangle',
   'ScreenImage',
   'StaticLabel',
@@ -232,7 +234,7 @@ function buildExerciseProps(def: WidgetDefinition): Widget['props'] {
 }
 
 describe('registry-driven per-type round trip', () => {
-  it('registers exactly the expected 21 widget types', () => {
+  it('registers exactly the expected 23 widget types', () => {
     const registered = widgetRegistry
       .getAll()
       .map((d) => d.type)
@@ -542,10 +544,23 @@ describe('fixture stability', () => {
 
     expect(e2).toBe(e1);
     expect(normalizeScreen(r2.screen)).toEqual(normalizeScreen(r1.screen));
-    expect(r2.report.unknownWidgets).toEqual([]);
-    expect(r2.report.degradedWidgets).toEqual([]);
+    // The saved document still holds every node under the type it was opened
+    // with, so reopening it reports the same placeholders and degrades.
+    expect(r2.report.unknownWidgets).toEqual(r1.report.unknownWidgets);
+    expect(r2.report.degradedWidgets).toEqual(r1.report.degradedWidgets);
+    expect(r2.report.keptRules).toEqual(r1.report.keptRules);
     expect(r2.report.droppedProps).toEqual([]);
     expect(r2.report.droppedRules).toEqual([]);
+  });
+
+  it.each(fixtures)('$name saves as the document that was opened', ({ json }) => {
+    const opened = json as { metadata: { source: unknown } };
+    const saved = exportScreenJSON(importScreenJSON(json).screen, { savedAt: FIXED });
+    // `metadata.source` is the one field a save rewrites (see the provenance tests).
+    expect({ ...saved, metadata: { ...saved.metadata, source: null } }).toEqual({
+      ...opened,
+      metadata: { ...opened.metadata, source: null },
+    });
   });
 
   it('simple: canonicalizes widget/rule shapes as expected', () => {
@@ -571,8 +586,11 @@ describe('fixture stability', () => {
     });
 
     const unknownNode = doc1.root.children.find((c: { id: string }) => c.id === 'w-008');
-    expect(unknownNode.type).toBe('rectangle');
+    expect(unknownNode.type).toBe('unknown-widget');
     expect(unknownNode.props.originalClass).toBe('activeRectangleClass');
+    // The placeholder's invented label/fill stay out of the document.
+    expect(unknownNode.props).not.toHaveProperty('label');
+    expect(unknownNode.props).not.toHaveProperty('fill');
     // Node-level warnings stay node-level through the round trip — they are
     // NOT flattened into the props bag.
     expect(unknownNode.props).not.toHaveProperty('warnings');
@@ -581,45 +599,79 @@ describe('fixture stability', () => {
     ]);
 
     const groupBoxNode = doc1.root.children.find((c: { id: string }) => c.id === 'w-005');
-    expect(groupBoxNode.type).toBe('group');
-    expect(groupBoxNode.props.label).toBe('Controls');
+    expect(groupBoxNode.type).toBe('group-box');
+    expect(groupBoxNode.props.title).toBe('Controls');
+    expect(groupBoxNode.props).not.toHaveProperty('label');
+    expect(groupBoxNode.props).not.toHaveProperty('layoutMode');
   });
 
-  it('p1_widgets: related-display-button canonicalizes to regular-button + actions carrier', () => {
+  it('p1_widgets: related-display-button saves under its own type, file/macros back as props', () => {
     const r1 = importScreenJSON(p1WidgetsFixture);
+    expect(r1.screen.widgets['w-003'].actions).toEqual([
+      { type: 'open_display', file: 'subscreen', target: 'window', macros: { DEV: '${P}' } },
+    ]);
     const e1 = serializeScreenJSON(r1.screen, { savedAt: FIXED });
     const doc1 = JSON.parse(e1);
 
     const buttonNode = doc1.root.children.find((c: { id: string }) => c.id === 'w-003');
-    expect(buttonNode.type).toBe('regular-button');
+    expect(buttonNode.type).toBe('related-display-button');
     expect(buttonNode.props.label).toBe('Open');
-    expect(buttonNode.props.actions).toEqual([
+    expect(buttonNode.props.file).toBe('subscreen');
+    expect(buttonNode.props.macros).toEqual({ DEV: '${P}' });
+    expect(buttonNode.props).not.toHaveProperty('actions');
+  });
+
+  it('p1_widgets: an edited related-display-button falls back to regular-button + actions carrier', () => {
+    const { screen } = importScreenJSON(p1WidgetsFixture);
+    const button = screen.widgets['w-003'];
+    // Two actions are more than a related-display-button can say.
+    button.actions = [...button.actions, { type: 'open_webpage', url: 'https://example.org' }];
+    const doc = exportScreenJSON(screen, { savedAt: FIXED });
+    const node = doc.root.children!.find((c) => c.id === 'w-003')!;
+    expect(node.type).toBe('regular-button');
+    expect(node.props.actions).toEqual([
       { type: 'open_display', file: 'subscreen', target: 'window', macros: { DEV: '${P}' } },
+      { type: 'open_webpage', url: 'https://example.org' },
     ]);
+    expect(node.props).not.toHaveProperty('file');
+  });
+
+  it('p1_widgets: a retargeted related display follows the edit', () => {
+    const { screen } = importScreenJSON(p1WidgetsFixture);
+    screen.widgets['w-003'].actions = [{ type: 'open_display', file: 'other', target: 'window' }];
+    const doc = exportScreenJSON(screen, { savedAt: FIXED });
+    const node = doc.root.children!.find((c) => c.id === 'w-003')!;
+    expect(node.type).toBe('related-display-button');
+    expect(node.props.file).toBe('other');
+    expect(node.props).not.toHaveProperty('macros');
   });
 
   // The fixture declares one formula-driven rule (`w-002`'s `r-001`) with no
   // SB representation — dropped and reported — and one conditional rule
   // (`w-003`'s `r-002`) that survives intact.
-  it('formula-driven: both formulas preserved; the formula-driven rule is absent and reported', () => {
+  it('formula-driven: both formulas preserved; the formula-driven rule is kept verbatim and reported', () => {
     const r1 = importScreenJSON(formulaDrivenFixture);
-    expect(r1.report.droppedRules.length).toBe(1);
-    expect(r1.report.droppedRules[0]).toContain('Width tracks formula');
+    expect(r1.report.droppedRules).toEqual([]);
+    expect(r1.report.keptRules.length).toBe(1);
+    expect(r1.report.keptRules[0]).toContain('Width tracks formula');
 
     const e1 = serializeScreenJSON(r1.screen, { savedAt: FIXED });
     const doc1 = JSON.parse(e1);
     expect(doc1.formulas).toEqual(formulaDrivenFixture.formulas);
 
-    // w-002's formula-driven rule has no SB/IR representation and is gone.
+    // w-002's formula-driven rule has no SB representation: it is not on the
+    // editable rule list, but the save writes it back as it came.
+    expect(r1.screen.widgets['w-002'].rules).toEqual([]);
     const w002 = doc1.root.children.find((c: { id: string }) => c.id === 'w-002');
-    expect(w002.rules).toBeUndefined();
+    const original = formulaDrivenFixture.root.children.find((c) => c.id === 'w-002')!;
+    expect(w002.rules).toEqual(original.rules);
 
     // w-003's conditional rule survives with its original id.
     const w003 = doc1.root.children.find((c: { id: string }) => c.id === 'w-003');
     expect(w003.rules[0].id).toBe('r-002');
   });
 
-  it('vacuum-system: macro description, widget meta.comment, embedded-display, and precision loss all preserved', () => {
+  it('vacuum-system: macro description, widget meta.comment, embedded-display, and an uncoercible precision all preserved', () => {
     const r1 = importScreenJSON(vacuumSystemFixture);
     const e1 = serializeScreenJSON(r1.screen, { savedAt: FIXED });
     const doc1 = JSON.parse(e1);
@@ -633,7 +685,10 @@ describe('fixture stability', () => {
     const w002 = doc1.root.children.find((c: { id: string }) => c.id === 'w-002');
     expect(w002.meta.comment).toBe('Primary pressure readout — DO NOT MOVE');
     expect(w002.rules[0].id).toBe('r-001');
-    expect(w002.props.precision).toBeUndefined();
+    // `precision: "fromPV"` is not a number, so the model has no prop for it;
+    // it rides in the passthrough and is written back.
+    expect(r1.screen.widgets['w-002'].props.precision).toBeUndefined();
+    expect(w002.props.precision).toBe('fromPV');
 
     const embeddedNode = doc1.root.children.find(
       (c: { type: string }) => c.type === 'embedded-display'
@@ -751,5 +806,228 @@ describe('node-level warnings', () => {
     const node = out.root.children![0];
     expect(node.warnings).toEqual(['arc fill approximated']);
     expect(node.props).not.toHaveProperty('warnings');
+  });
+});
+
+// ── 9. Converter output: open → save gives back the document ─────────────────
+//
+// Shapes the EDM converter actually emits that the model has no direct home
+// for. Each one is carried on `Widget.ir` / `ScreenMeta` so an unedited save
+// is the opened document again.
+
+function converterDoc(children: unknown[], rootExtras: Record<string, unknown> = {}) {
+  return {
+    schemaVersion: '1.0',
+    kind: 'screen',
+    id: 'ads/bld_diagnostics',
+    metadata: {
+      title: 'bld_diagnostics',
+      source: { type: 'edl-converter', sourceFile: 'ads/bld_diagnostics.edl' },
+      size: { width: 400, height: 300 },
+    },
+    macros: [{ name: 'P', default: '' }],
+    root: {
+      id: 'w-001',
+      type: 'absolute-canvas',
+      props: { backgroundColor: '#c8c8c8', height: 300, width: 400 },
+      geometry: { x: 0, y: 0, width: 400, height: 300 },
+      children,
+      ...rootExtras,
+    },
+  };
+}
+
+const at = (n: number) => ({ x: 10, y: 10 * n, width: 100, height: 20 });
+
+/** What is left to compare once the one field a save rewrites is set aside. */
+function withoutSource(doc: unknown) {
+  const d = doc as { metadata: Record<string, unknown> };
+  return { ...d, metadata: { ...d.metadata, source: null } };
+}
+
+describe('converter output round trip', () => {
+  const children = [
+    // precision the model cannot hold as a number
+    {
+      id: 'w-002',
+      type: 'pv-label',
+      props: { pv: '${P}:RBV', precision: 'fromPV' },
+      geometry: at(1),
+    },
+    // macro where the model wants a number
+    {
+      id: 'w-003',
+      type: 'pv-progress-bar',
+      props: { pv: '${P}:TMIT', min: '${scaleMin}', max: '${scaleMax}' },
+      geometry: at(2),
+    },
+    // related display with and without a target
+    {
+      id: 'w-004',
+      type: 'related-display-button',
+      props: { label: 'Config', file: 'config.screen.json', macros: { DEV: '${P}' }, fontSize: 10 },
+      geometry: at(3),
+    },
+    { id: 'w-005', type: 'related-display-button', props: { label: 'Nothing' }, geometry: at(4) },
+    // a button that only reads a state PV: pv-button with no control pv
+    {
+      id: 'w-006',
+      type: 'pv-button',
+      props: { readbackPV: '${P}:STATE', onLabel: 'On', offLabel: 'Off' },
+      geometry: at(5),
+    },
+    // an action vocabulary the builder does not know stays a plain prop
+    {
+      id: 'w-007',
+      type: 'regular-button',
+      props: {
+        label: 'Camera',
+        actions: [{ type: 'shell_command', command: 'firefox http://cam' }],
+      },
+      geometry: at(6),
+      warnings: [
+        'EDM shell commands carried as actions; the web runtime does not execute shell commands',
+      ],
+    },
+    {
+      id: 'w-008',
+      type: 'unknown-widget',
+      props: { originalClass: 'menuMuxClass', originalProps: { controlPv: '${P}:MUX' } },
+      geometry: at(7),
+      warnings: ['No registry entry for menuMuxClass; rendering placeholder'],
+    },
+    // a type newer than the builder
+    { id: 'w-009', type: 'pv-sparkline', props: { pv: '${P}:HIST', points: 50 }, geometry: at(8) },
+    // converter containers
+    {
+      id: 'w-010',
+      type: 'group-box',
+      props: { title: 'Magnets' },
+      geometry: at(9),
+      children: [{ id: 'w-011', type: 'frame', props: {}, geometry: at(10) }],
+    },
+  ];
+  const doc = converterDoc(children, {
+    warnings: [
+      '2 widget(s) lie entirely outside the 400x300 canvas; kept in the IR, clipped at runtime',
+    ],
+  });
+
+  it('saves the opened document back, node for node', () => {
+    const saved = exportScreenJSON(importScreenJSON(doc).screen, { savedAt: FIXED });
+    expect(validate(saved)).toEqual([]);
+    expect(withoutSource(saved)).toEqual(withoutSource(doc));
+  });
+
+  it('keeps the provenance of the opened document under the builder stamp', () => {
+    const saved = exportScreenJSON(importScreenJSON(doc).screen, { savedAt: FIXED });
+    expect(saved.metadata.source).toEqual({
+      type: 'screen-builder',
+      savedAt: FIXED,
+      sourceFile: 'ads/bld_diagnostics.edl',
+      origin: 'edl-converter',
+    });
+    // A second open → save keeps the first origin rather than recording the builder.
+    const again = exportScreenJSON(importScreenJSON(saved).screen, { savedAt: FIXED });
+    expect(again).toEqual(saved);
+  });
+
+  it('writes a model value over a carried one once the prop is set in the editor', () => {
+    const { screen } = importScreenJSON(doc);
+    screen.widgets['w-002'].props.precision = 3;
+    screen.widgets['w-003'].props.minValue = 0;
+    const saved = exportScreenJSON(screen, { savedAt: FIXED });
+    const node = (id: string) => saved.root.children!.find((c) => c.id === id)!;
+    expect(node('w-002').props.precision).toBe(3);
+    expect(node('w-003').props.min).toBe(0);
+    expect(node('w-003').props.max).toBe('${scaleMax}');
+  });
+
+  it('gives a pv-button its control PV back under `pv` when one is added', () => {
+    const { screen } = importScreenJSON(doc);
+    screen.widgets['w-006'].props.pvName = '${P}:CTRL';
+    const saved = exportScreenJSON(screen, { savedAt: FIXED });
+    const node = saved.root.children!.find((c) => c.id === 'w-006')!;
+    expect(node.type).toBe('pv-button');
+    expect(node.props.pv).toBe('${P}:CTRL');
+  });
+
+  it('a related display that gains a control PV is no longer one', () => {
+    const { screen } = importScreenJSON(doc);
+    screen.widgets['w-004'].props.pvName = '${P}:CTRL';
+    const saved = exportScreenJSON(screen, { savedAt: FIXED });
+    const node = saved.root.children!.find((c) => c.id === 'w-004')!;
+    expect(node.type).toBe('pv-button');
+    expect(node.props.actions).toEqual([
+      {
+        type: 'open_display',
+        file: 'config.screen.json',
+        target: 'window',
+        macros: { DEV: '${P}' },
+      },
+    ]);
+  });
+
+  it('keeps edits made to a placeholder without disturbing the node it stands for', () => {
+    const { screen } = importScreenJSON(doc);
+    screen.widgets['w-008'].props.label = 'mux (todo)';
+    const saved = exportScreenJSON(screen, { savedAt: FIXED });
+    const node = saved.root.children!.find((c) => c.id === 'w-008')!;
+    expect(node.type).toBe('unknown-widget');
+    expect(node.props).toEqual({
+      label: 'mux (todo)',
+      originalClass: 'menuMuxClass',
+      originalProps: { controlPv: '${P}:MUX' },
+    });
+  });
+
+  it('writes editor chrome and widget names only once they leave their defaults', () => {
+    const { screen } = importScreenJSON(doc);
+    const untouched = exportScreenJSON(screen, { savedAt: FIXED });
+    expect(Object.keys(untouched.root.props).sort()).toEqual([
+      'backgroundColor',
+      'height',
+      'width',
+    ]);
+
+    screen.meta.gridSize = 5;
+    screen.meta.showGrid = false;
+    screen.widgets['w-002'].name = 'beam readback';
+    const edited = exportScreenJSON(screen, { savedAt: FIXED });
+    expect(edited.root.props.gridSize).toBe(5);
+    expect(edited.root.props.showGrid).toBe(false);
+    expect(edited.root.props).not.toHaveProperty('snapToGrid');
+    expect(edited.root.children!.find((c) => c.id === 'w-002')!.props.name).toBe('beam readback');
+
+    const back = importScreenJSON(edited).screen;
+    expect(back.meta.gridSize).toBe(5);
+    expect(back.meta.showGrid).toBe(false);
+    expect(back.widgets['w-002'].name).toBe('beam readback');
+  });
+
+  it('carries root props it does not model', () => {
+    const withExtra = converterDoc([], {
+      props: { width: 400, height: 300, gridSize: 'wide', scrollPolicy: 'never' },
+    });
+    const { screen } = importScreenJSON(withExtra);
+    // A malformed chrome value is not imported, and not thrown away either.
+    expect(screen.meta.gridSize).toBe(createDefaultScreenMeta().gridSize);
+    const saved = exportScreenJSON(screen, { savedAt: FIXED });
+    expect(saved.root.props).toEqual({
+      width: 400,
+      height: 300,
+      gridSize: 'wide',
+      scrollPolicy: 'never',
+    });
+  });
+
+  it('saves a hand-authored `pv` on an identity type back under `pv`', () => {
+    const toggled = converterDoc([
+      { id: 'w-002', type: 'pv-toggle', props: { pv: '${P}:ENABLE' }, geometry: at(1) },
+    ]);
+    const { screen } = importScreenJSON(toggled);
+    expect(screen.widgets['w-002'].props.pvName).toBe('${P}:ENABLE');
+    const saved = exportScreenJSON(screen, { savedAt: FIXED });
+    expect(saved.root.children![0].props).toEqual({ pv: '${P}:ENABLE' });
   });
 });

@@ -204,6 +204,47 @@ export interface WidgetProps {
   [key: string]: unknown;
 }
 
+/**
+ * IR data the builder has no model for, kept so that opening a screen and
+ * saving it again gives back the document that was opened (the Screen IR
+ * round-trip contract). Written by `importScreenJSON`, read back only by
+ * `exportScreenJSON`; nothing in the editor UI looks at it.
+ */
+export interface WidgetIRPassthrough {
+  /**
+   * The IR node `type` the widget was imported from. Several IR types share
+   * one builder type (`related-display-button` and `regular-button` are both
+   * a `PVButton`; an `unknown-widget` is a `Rectangle` placeholder), so a
+   * save re-emits this type for as long as the widget still fits it.
+   */
+  type?: string;
+  /**
+   * IR props with no model prop to live in, keyed by their IR key: a value
+   * the importer could not coerce (pv-label `precision: "fromPV"`, a
+   * `${MACRO}` where a number is expected), or every prop of a node whose
+   * type the builder does not know. Re-emitted verbatim unless the model now
+   * supplies that key.
+   */
+  props?: Record<string, unknown>;
+  /**
+   * Model props the importer invented (a container's `layoutMode`, a
+   * placeholder's `label`). Left out of a save under `type` while they still
+   * hold these values, so they do not leak into the document.
+   */
+  synthesized?: Record<string, unknown>;
+  /**
+   * Model prop key -> the IR key it was read from, where that differs from
+   * the type's default export name (a hand-authored `pv` on a type that
+   * otherwise saves `pvName`).
+   */
+  renamed?: Record<string, string>;
+  /**
+   * IR rules with no builder equivalent (formula-driven), with their position
+   * in the node's `rules` array. Re-emitted verbatim at that position.
+   */
+  rules?: { index: number; rule: unknown }[];
+}
+
 export interface Widget {
   id: string;
   type: WidgetType;
@@ -229,6 +270,8 @@ export interface Widget {
    * import report each time the document is opened.
    */
   warnings?: string[];
+  /** IR data with no model home, carried for a lossless save. */
+  ir?: WidgetIRPassthrough;
 }
 
 // ── Screen Model ──────────────────��──────────────────────────────────────────
@@ -264,6 +307,20 @@ export interface ScreenMeta {
   author?: string;
   /** IR passthrough (`macros[].description`, keyed by macro name) so saves round-trip. */
   macroDescriptions?: Record<string, string>;
+  /** IR passthrough (`root.id`); saves fall back to `'root'`. */
+  rootId?: string;
+  /** IR passthrough (`root.warnings`: screen-level converter notes) so saves round-trip. */
+  rootWarnings?: string[];
+  /** IR passthrough: `root.props` keys the builder does not model, re-emitted verbatim. */
+  rootProps?: Record<string, unknown>;
+  /**
+   * Where the screen came from before the builder saved it: the original
+   * `metadata.source` minus `savedAt`, with a converter's source `type` kept
+   * as `origin`. A save stamps `type: 'screen-builder'` and re-emits the rest
+   * (`sourceFile`, `convertedAt`, `origin`), so a converted screen still says
+   * which legacy file it was converted from.
+   */
+  provenance?: Record<string, unknown>;
 }
 
 export interface ScreenModel {
