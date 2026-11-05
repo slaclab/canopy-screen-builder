@@ -92,6 +92,7 @@ export const WIDGET_CATALOG = {
     'PVTextInput',
     'PVButton',
     'PVShellCommand',
+    'PVRelatedDisplayButton',
     'PVDropdown',
     'PVCheckbox',
     'PVRadioGroup',
@@ -101,9 +102,17 @@ export const WIDGET_CATALOG = {
     'PVProgressBar',
     'PVTabs',
   ],
-  indicators: ['PVLed', 'PVByteIndicator', 'PVMeter', 'PVGauge', 'PVTank', 'PVThermometer'],
-  charts: ['PVWaveformPlot'],
-  drawings: ['Rectangle', 'Ellipse', 'Line', 'Arc', 'Polygon', 'StaticLabel', 'ScreenImage'],
+  indicators: [
+    'PVLed',
+    'PVByteIndicator',
+    'PVMeter',
+    'PVGauge',
+    'PVTank',
+    'PVThermometer',
+    'PVSymbol',
+  ],
+  charts: ['PVWaveformPlot', 'PVTimePlot', 'PVScatterPlot'],
+  drawings: ['Rectangle', 'Ellipse', 'Line', 'Arc', 'Polygon', 'StaticLabel', 'Image'],
   containers: ['Group', 'EmbeddedScreen'],
 } as const;
 
@@ -175,15 +184,40 @@ export interface WidgetProps {
   cornerRadius?: number;
   startAngle?: number;
   spanAngle?: number;
+  points?: Position[];
+  closed?: boolean;
+  numPoints?: number;
 
-  // Image
-  filename?: string;
+  // Image (unified static / live)
+  mode?: 'static' | 'live';
+  src?: string;
   stretchMode?: 'none' | 'fit' | 'fill' | 'stretch';
 
-  // Embedded display
+  // Embedded display / related-display navigation
   file?: string;
   macros?: Record<string, string>;
   resizeMode?: 'none' | 'resize' | 'sizeToContent' | 'stretch' | 'crop';
+  target?: 'tab' | 'window' | 'replace';
+  showIcon?: boolean;
+
+  // Symbol (state-driven image)
+  states?: Array<{ value: number | string; src?: string; label?: string }>;
+  defaultSrc?: string;
+
+  // Time plot / scatter plot
+  timeWindow?: number;
+  xLabel?: string;
+  yLabel?: string;
+  color?: string;
+  pvNameX?: string;
+  pvNameY?: string;
+  maxPoints?: number;
+
+  // Image view
+  imageWidth?: number;
+  imageHeight?: number;
+  imageMin?: number;
+  imageMax?: number;
 
   // LED
   numBits?: number;

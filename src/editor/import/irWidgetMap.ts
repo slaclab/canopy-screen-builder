@@ -232,6 +232,64 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
     },
     consumes: ['pv', 'bit', 'onColor', 'offColor'],
   },
+  'pv-symbol': {
+    sbType: 'PVSymbol',
+    map: (ir, p) => {
+      put(p, 'pvName', str(ir.pv));
+      put(p, 'defaultSrc', str(ir.defaultSrc));
+      put(p, 'stretchMode', ir.stretchMode);
+      if (Array.isArray(ir.states)) p.states = ir.states as WidgetProps['states'];
+    },
+    consumes: ['pv', 'defaultSrc', 'stretchMode', 'states'],
+  },
+  'pv-image-view': {
+    sbType: 'Image',
+    map: (ir, p) => {
+      p.mode = 'live';
+      put(p, 'pvName', str(ir.pv));
+      put(p, 'imageWidth', num(ir.imageWidth));
+      put(p, 'imageHeight', num(ir.imageHeight));
+      put(p, 'imageMin', num(ir.imageMin));
+      put(p, 'imageMax', num(ir.imageMax));
+      // Accept both `src` (unified) and `defaultSrc` (legacy) as the fallback.
+      put(p, 'src', str(ir.src) ?? str(ir.defaultSrc));
+      put(p, 'stretchMode', ir.stretchMode);
+    },
+    consumes: [
+      'pv',
+      'imageWidth',
+      'imageHeight',
+      'imageMin',
+      'imageMax',
+      'defaultSrc',
+      'src',
+      'stretchMode',
+    ],
+  },
+  'pv-time-plot': {
+    sbType: 'PVTimePlot',
+    map: (ir, p) => {
+      put(p, 'pvName', str(ir.pv));
+      put(p, 'title', str(ir.title));
+      put(p, 'yLabel', str(ir.yLabel));
+      put(p, 'timeWindow', num(ir.timeWindow));
+      put(p, 'color', str(ir.color));
+    },
+    consumes: ['pv', 'title', 'yLabel', 'timeWindow', 'color'],
+  },
+  'pv-scatter-plot': {
+    sbType: 'PVScatterPlot',
+    map: (ir, p) => {
+      put(p, 'pvNameX', str(ir.xPv));
+      put(p, 'pvNameY', str(ir.yPv));
+      put(p, 'title', str(ir.title));
+      put(p, 'xLabel', str(ir.xLabel));
+      put(p, 'yLabel', str(ir.yLabel));
+      put(p, 'maxPoints', num(ir.maxPoints));
+      put(p, 'color', str(ir.color));
+    },
+    consumes: ['xPv', 'yPv', 'title', 'xLabel', 'yLabel', 'maxPoints', 'color'],
+  },
   'embedded-display': {
     sbType: 'EmbeddedScreen',
     map: (ir, p) => {
@@ -242,12 +300,14 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
     consumes: ['file', 'macros', 'resizeMode'],
   },
   'image-view': {
-    sbType: 'ScreenImage',
+    sbType: 'Image',
     map: (ir, p) => {
-      put(p, 'filename', str(ir.src));
+      p.mode = 'static';
+      // Accept both `src` (unified) and `filename` (legacy) as the source.
+      put(p, 'src', str(ir.src) ?? str(ir.filename));
       put(p, 'stretchMode', ir.stretchMode);
     },
-    consumes: ['src', 'stretchMode'],
+    consumes: ['src', 'filename', 'stretchMode'],
   },
   'shell-command-button': {
     sbType: 'PVShellCommand',
@@ -288,13 +348,19 @@ const TYPE_MAP: Record<string, TypeMapEntry> = {
     consumes: [],
   },
   'related-display-button': {
-    sbType: 'PVButton',
-    // `file`/`macros` are turned into an open_display Action by mapWidget, not
-    // props — so they're listed in `consumes` to keep them off the button.
-    map: (ir, p) => put(p, 'label', str(ir.label)),
-    consumes: ['label', 'file', 'macros'],
-    degradeReason:
-      'related-display navigation carried as an open_display action; review target window behavior',
+    sbType: 'PVRelatedDisplayButton',
+    map: (ir, p) => {
+      put(p, 'label', str(ir.label));
+      put(p, 'file', str(ir.file));
+      if (ir.macros && typeof ir.macros === 'object') {
+        p.macros = ir.macros as Record<string, string>;
+      }
+      const t = str(ir.target);
+      if (t === 'tab' || t === 'window' || t === 'replace') {
+        p.target = t;
+      }
+    },
+    consumes: ['label', 'file', 'macros', 'target'],
   },
   // Containers degrade to Group: children + z-order survive, chrome does not.
   frame: {
@@ -443,23 +509,6 @@ export function mapWidget(node: WidgetNode): MapResult {
   entry.map(ir, props);
 
   const actions: Action[] = [];
-
-  // related-display-button click opens another screen — carry that as an SB
-  // open_display Action rather than props on the button.
-  if (node.type === 'related-display-button') {
-    const file = str(ir.file);
-    if (file) {
-      const macros = ir.macros;
-      actions.push({
-        type: 'open_display',
-        file,
-        target: 'window',
-        ...(macros && typeof macros === 'object'
-          ? { macros: macros as Record<string, string> }
-          : {}),
-      });
-    }
-  }
 
   // Generic pass-through: keep any IR prop THIS entry's mapper didn't
   // consume, so a newer-than-SB prop survives import rather than vanishing.

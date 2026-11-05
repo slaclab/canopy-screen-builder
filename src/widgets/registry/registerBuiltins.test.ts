@@ -13,7 +13,7 @@ describe('registerBuiltinWidgets', () => {
     'PVRadioGroup',
     'PVByteIndicator',
     'PVMeter',
-    'ScreenImage',
+    'Image',
     'PVShellCommand',
     'PVWaveformPlot',
     // Plus the long-standing set, as a sanity check.
