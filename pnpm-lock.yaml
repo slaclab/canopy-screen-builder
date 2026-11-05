@@ -30,8 +30,8 @@ importers:
         specifier: ^1.1.0
         version: 1.1.0
       '@ibm/plex-serif':
-        specifier: ^1.1.0
-        version: 1.1.0
+        specifier: ^2.0.0
+        version: 2.0.0
       '@monaco-editor/react':
         specifier: ^4.7.0
         version: 4.7.0(monaco-editor@0.55.1)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
@@ -420,11 +420,18 @@ packages:
   '@ibm/plex-serif@1.1.0':
     resolution: {integrity: sha512-ORIyWlK8t8mvpFI7AAfhVFH+sacink2l9AjLiKZscmAzLVSa2dqFckrPOXqx4dK/cax567gWwCpJNEYk7xWxBQ==}
 
+  '@ibm/plex-serif@2.0.0':
+    resolution: {integrity: sha512-xVu9JsC18tBoQF2M6fofpsWrHj5a94saxlOZbYmXoC0E3UfjgS1JlibgrnaUJjnkLlEyCpMgI2PdhkDxijw0gA==}
+
   '@ibm/plex@6.4.1':
     resolution: {integrity: sha512-fnsipQywHt3zWvsnlyYKMikcVI7E2fEwpiPnIHFqlbByXVfQfANAAeJk1IV4mNnxhppUIDlhU0TzwYwL++Rn2g==}
 
   '@ibm/telemetry-js@1.11.0':
     resolution: {integrity: sha512-RO/9j+URJnSfseWg9ZkEX9p+a3Ousd33DBU7rOafoZB08RqdzxFVYJ2/iM50dkBuD0o7WX7GYt1sLbNgCoE+pA==}
+    hasBin: true
+
+  '@ibm/telemetry-js@1.12.0':
+    resolution: {integrity: sha512-tNgmk2k8loNDTnPInlu7yMP9YOCr9UMwSnXN7SCEsGIV8xHfTawhXlDnp1PV0Lbv+2GoLQKSgkShlJeGPi4jTg==}
     hasBin: true
 
   '@internationalized/number@3.6.7':
@@ -2027,16 +2034,16 @@ snapshots:
 
   '@carbon/colors@11.52.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@carbon/feature-flags@1.3.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@carbon/grid@11.56.0':
     dependencies:
       '@carbon/layout': 11.53.0
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@carbon/icon-helpers@10.76.0':
     dependencies:
@@ -2051,11 +2058,11 @@ snapshots:
 
   '@carbon/layout@11.53.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@carbon/motion@11.46.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@carbon/react@1.108.0(react-dom@19.2.6(react@19.2.6))(react-is@18.2.0)(react@19.2.6)(sass@1.100.0)':
     dependencies:
@@ -2099,7 +2106,7 @@ snapshots:
       '@ibm/plex-sans-thai': 1.1.0
       '@ibm/plex-sans-thai-looped': 1.1.0
       '@ibm/plex-serif': 1.1.0
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
     optionalDependencies:
       sass: 1.100.0
 
@@ -2108,18 +2115,18 @@ snapshots:
       '@carbon/colors': 11.52.0
       '@carbon/layout': 11.53.0
       '@carbon/type': 11.60.0
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
       color: 4.2.3
 
   '@carbon/type@11.60.0':
     dependencies:
       '@carbon/grid': 11.56.0
       '@carbon/layout': 11.53.0
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@carbon/utilities@0.20.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
       '@internationalized/number': 3.6.7
 
   '@csstools/color-helpers@5.1.0': {}
@@ -2264,23 +2271,23 @@ snapshots:
 
   '@ibm/plex-sans-arabic@1.1.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@ibm/plex-sans-devanagari@1.1.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@ibm/plex-sans-hebrew@1.1.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@ibm/plex-sans-thai-looped@1.1.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@ibm/plex-sans-thai@1.1.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@ibm/plex-sans@1.1.0':
     dependencies:
@@ -2288,13 +2295,19 @@ snapshots:
 
   '@ibm/plex-serif@1.1.0':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
+
+  '@ibm/plex-serif@2.0.0':
+    dependencies:
+      '@ibm/telemetry-js': 1.12.0
 
   '@ibm/plex@6.4.1':
     dependencies:
-      '@ibm/telemetry-js': 1.11.0
+      '@ibm/telemetry-js': 1.12.0
 
   '@ibm/telemetry-js@1.11.0': {}
+
+  '@ibm/telemetry-js@1.12.0': {}
 
   '@internationalized/number@3.6.7':
     dependencies:
