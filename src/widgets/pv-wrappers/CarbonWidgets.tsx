@@ -10,7 +10,7 @@ import {
   RadioButtonGroup,
   RadioButton,
 } from '@carbon/react';
-import { Terminal } from '@carbon/icons-react';
+import { Terminal, Launch } from '@carbon/icons-react';
 import { usePV } from '../../hooks/usePV';
 import { alarmBorderStyle } from '../../theme/alarm';
 import { AlarmSeverity, AlarmSeverityName } from '../../types/widget';
@@ -241,6 +241,54 @@ export function CarbonPVShellCommand({ layout, props, isEditing }: WidgetRendere
       }}
     >
       {showIcon && <Terminal size={16} />}
+      {label}
+    </button>
+  );
+}
+
+/** PVRelatedDisplayButton — button that opens another screen file with macros. */
+export function CarbonPVRelatedDisplayButton({ layout, props, isEditing }: WidgetRendererProps) {
+  const file = (props.file as string) ?? '';
+  const label = (props.label as string) || 'Open';
+  const showIcon = props.showIcon !== false;
+  const target = (props.target as string) ?? 'window';
+  const fontFamily = (props.fontFamily as string) || 'IBM Plex Sans, sans-serif';
+  const fontSize = (props.fontSize as number) ?? 13;
+  const foregroundColor = (props.foregroundColor as string) ?? '#161616';
+  const backgroundColor = (props.backgroundColor as string) ?? '#bbbbbb';
+
+  // In edit mode the widget is inert. Live navigation is a runtime concern;
+  // the file/macros/target props are preserved for the runtime to interpret.
+  const handleClick = useCallback(() => {
+    if (isEditing || !file) return;
+  }, [isEditing, file]);
+
+  const tooltip = file
+    ? `${target === 'tab' ? 'tab' : target === 'replace' ? 'replace' : 'window'}: ${file}`
+    : undefined;
+
+  return (
+    <button
+      onClick={handleClick}
+      title={tooltip}
+      style={{
+        width: layout.width,
+        height: layout.height,
+        backgroundColor,
+        color: foregroundColor,
+        fontFamily,
+        fontSize,
+        border: 'none',
+        borderRadius: 2,
+        cursor: isEditing ? 'default' : 'pointer',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 4,
+        padding: 0,
+      }}
+    >
+      {showIcon && <Launch size={16} />}
       {label}
     </button>
   );

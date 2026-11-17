@@ -99,7 +99,7 @@ export function CodeEditor() {
           export const Line: React.FC<DrawingProps>;
           export const Arc: React.FC<DrawingProps>;
           export const StaticLabel: React.FC<DrawingProps & { text?: string }>;
-          export const ScreenImage: React.FC<DrawingProps>;
+          export const Image: React.FC<DrawingProps>;
         }
         declare module '@pydm/containers' {
           interface ContainerProps { x: number; y: number; w: number; h: number; children?: React.ReactNode; [key: string]: any; }

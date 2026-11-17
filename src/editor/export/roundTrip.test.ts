@@ -182,6 +182,7 @@ const EXPECTED_REGISTERED_TYPES: WidgetType[] = [
   'Arc',
   'Ellipse',
   'Group',
+  'Image',
   'Line',
   'PVButton',
   'PVByteIndicator',
@@ -191,14 +192,18 @@ const EXPECTED_REGISTERED_TYPES: WidgetType[] = [
   'PVMeter',
   'PVProgressBar',
   'PVRadioGroup',
+  'PVRelatedDisplayButton',
+  'PVScatterPlot',
   'PVShellCommand',
   'PVSlider',
+  'PVSymbol',
   'PVTextDisplay',
   'PVTextInput',
+  'PVTimePlot',
   'PVToggle',
   'PVWaveformPlot',
+  'Polygon',
   'Rectangle',
-  'ScreenImage',
   'StaticLabel',
 ];
 
@@ -585,17 +590,18 @@ describe('fixture stability', () => {
     expect(groupBoxNode.props.label).toBe('Controls');
   });
 
-  it('p1_widgets: related-display-button canonicalizes to regular-button + actions carrier', () => {
+  it('p1_widgets: related-display-button round-trips as itself with file/macros on props', () => {
     const r1 = importScreenJSON(p1WidgetsFixture);
     const e1 = serializeScreenJSON(r1.screen, { savedAt: FIXED });
     const doc1 = JSON.parse(e1);
 
     const buttonNode = doc1.root.children.find((c: { id: string }) => c.id === 'w-003');
-    expect(buttonNode.type).toBe('regular-button');
+    expect(buttonNode.type).toBe('related-display-button');
     expect(buttonNode.props.label).toBe('Open');
-    expect(buttonNode.props.actions).toEqual([
-      { type: 'open_display', file: 'subscreen', target: 'window', macros: { DEV: '${P}' } },
-    ]);
+    expect(buttonNode.props.file).toBe('subscreen');
+    expect(buttonNode.props.macros).toEqual({ DEV: '${P}' });
+    // No synthesized open_display action anymore.
+    expect(buttonNode.props.actions).toBeUndefined();
   });
 
   // The fixture declares one formula-driven rule (`w-002`'s `r-001`) with no
